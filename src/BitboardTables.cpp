@@ -1,11 +1,212 @@
 #include "../inc/Game.h"
+#include "../inc/BitOps.h"
+#include <random>
 
-Game::Game() {
+
+void Game::initMagicLookupTable() {
+    for (int square = 0; square < 64; square++) {
+        // Generate magic number hashes for Bishops
+        bishopMagics[square] = initMagicAttacks(square, true);
+        // And the same for Rooks
+        rookMagics[square] = initMagicAttacks(square, false);
+    }
+    for (int i = 0; i < 64; i++) { std::cout << bishopMagics[i] << "," << std::endl; }
+        std::cout << "\n\n" << std::endl;
+    for (int i = 0; i < 64; i++) { std::cout << rookMagics[i] << "," << std::endl; }
+}
+
+void Game::initSliderAttacksLookupTable(bool bishop) {
+    for (int square = 0; square < 64; square++) {
+        unsigned long long mask = bishop ? diagonalMasks[square] : cardinalMasks[square];
+        int relevantBits = bishop ? relevantBitsBishop[square] : relevantBitsRook[square];
+        int occupancyIndices = (1 << relevantBits);
+        unsigned long long magicNum = bishop ? bishopMagics[square] : rookMagics[square];
+        for (int i=0; i < occupancyIndices; i++) {
+            unsigned long long occupancy = initBlockersPermutation(i, relevantBits, mask);
+            int magicIndex = (int)((occupancy * magicNum) >> (64 - relevantBits));
+            if (bishop) {
+                bishopAttacks[square][magicIndex] = initBishopAttacksForPosition(square, occupancy);
+            }
+            else {
+                rookAttacks[square][magicIndex] = initRookAttacksForPosition(square, occupancy);
+            }
+        } 
+    }
+}
+
+unsigned long long Game::initBlockersPermutation(int index, int relevantBits, unsigned long long mask) {
+    unsigned long long blockers = 0ULL;
+    for (int count = 0; count < relevantBits; count++)
+    {
+        int square = BitOps::countTrailingZeroes(mask);
+        if (mask & (1ULL << square)) {
+            mask ^= (1ULL << square);
+        };
+        if (index & (1 << count))
+            blockers |= (1ULL << square);
+    }
+    return blockers;
+}
+
+unsigned long long Game::initMagicAttacks(int square, bool bishop) {
+    unsigned long long occupancies[4096];
+    unsigned long long attacks[4096];
+    unsigned long long usedAttacks[4096];
+    unsigned long long mask = bishop ? diagonalMasks[square] : cardinalMasks[square];
+    int relevantBits = bishop ? relevantBitsBishop[square] : relevantBitsRook[square];
+    int occupancyIndices = 1 << relevantBits;
+    for (int i = 0; i < occupancyIndices; i++) {
+        occupancies[i] = initBlockersPermutation(i, relevantBits, mask);
+        attacks[i] = bishop ? initBishopAttacksForPosition(square, occupancies[i]) : initRookAttacksForPosition(square, occupancies[i]);
+    }
+
+    for (int tries = 0; tries < 100000000; tries++) {
+        unsigned long long magicNumber = BitOps::generateMagicNumber();
+        if (BitOps::countSetBits((mask*magicNumber) & 0xFF00000000000000) < 6) { continue; }
+        std::memset(usedAttacks, 0ULL, sizeof(usedAttacks));
+        int index, fail;
+        for (index = 0, fail = 0; !fail && index < occupancyIndices; index++) {
+            int magicIndex = (int)((occupancies[index]*magicNumber) >> (64 - relevantBits));
+            unsigned long long attackPattern = usedAttacks[magicIndex];
+            if (attackPattern == 0ULL) {
+                (usedAttacks[magicIndex]) = attacks[index];
+            }
+            else if (attackPattern != attacks[index]) { fail = 1; }
+        }
+        if (!fail) {
+            return magicNumber; 
+        }
+    }
+    return 0ULL;
+}
+
+unsigned long long Game::initBishopAttacksForPosition(int square, unsigned long long blockers) {
+    unsigned long long attacks = 0;
+    unsigned long long pos = 1ULL << square;
+    unsigned long long mask;
+    // North-East
+    mask = edgeMasks[0] & edgeMasks[3];
+    unsigned long long neAttacks = pos;
+    while (true) {
+        unsigned long long tmp = neAttacks;
+        neAttacks |= (neAttacks & mask) << 9;
+        if ((blockers & neAttacks) || tmp == neAttacks) { break; }
+    };
+    // North-West
+    mask = edgeMasks[0] & edgeMasks[2];
+    unsigned long long nwAttacks = pos;
+    while (true) {
+        unsigned long long tmp = nwAttacks;
+        nwAttacks |= (nwAttacks & mask) << 7;
+        if ((blockers & nwAttacks) || tmp == nwAttacks) { break; }
+    };
+    // South-East
+    mask = edgeMasks[1] & edgeMasks[3];
+    unsigned long long seAttacks = pos;
+    while (true) {
+        unsigned long long tmp = seAttacks;
+        seAttacks |= (seAttacks & mask) >> 7;
+        if ((blockers & seAttacks) || tmp == seAttacks) { break; }
+    };
+    // South-West
+    mask = edgeMasks[1] & edgeMasks[2];
+    unsigned long long swAttacks = pos;
+    while (true) {
+        unsigned long long tmp = swAttacks;
+        swAttacks |= (swAttacks & mask) >> 9;
+        if ((blockers & swAttacks) || tmp == swAttacks) { break; }
+    };
+    attacks |= neAttacks | nwAttacks | seAttacks | swAttacks;
+    attacks &= ~pos;
+    return attacks;
+}
+
+unsigned long long Game::initRookAttacksForPosition(int square, unsigned long long blockers) {
+    unsigned long long attacks = 0;
+    unsigned long long pos = 1ULL << square;
+    unsigned long long mask;
+    // North
+    mask = edgeMasks[0];
+    unsigned long long nAttacks = pos;
+    while (true) {
+        unsigned long long tmp = nAttacks;
+        nAttacks |= (nAttacks & mask) << 8;
+        if (blockers & nAttacks || tmp == nAttacks) { break; }
+    };
+    // East
+    mask = edgeMasks[3];
+    unsigned long long eAttacks = pos;
+    while (true) {
+        unsigned long long tmp = eAttacks;
+        eAttacks |= (eAttacks & mask) << 1;
+        if (blockers & eAttacks || tmp == eAttacks) { break; }
+    };
+    // West
+    mask = edgeMasks[2];
+    unsigned long long wAttacks = pos;
+    while (true) {
+        unsigned long long tmp = wAttacks;
+        wAttacks |= (wAttacks & mask) >> 1;
+        if (blockers & wAttacks || tmp == wAttacks) { break; }
+    };
+    // South
+    mask = edgeMasks[1];
+    unsigned long long sAttacks = pos;
+    while (true) {
+        unsigned long long tmp = sAttacks;
+        sAttacks |= (sAttacks & mask) >> 8;
+        if (blockers & sAttacks || tmp == sAttacks) { break; }
+    };
+    attacks |= nAttacks | eAttacks | wAttacks | sAttacks;
+    attacks &= ~pos;
+    return attacks;
+}
+
+void Game::initKingLookupTable() {
+    unsigned long long location = 0;
+    for(int i = 0; i < 64; i++) {
+        kingMovesTable[i] = (
+            ((location & edgeMasks[0]) << 8)
+            |((location & edgeMasks[0] & edgeMasks[2]) << 7)
+            |((location & edgeMasks[0] & edgeMasks[3]) << 9)
+            |((location & edgeMasks[2]) >> 1)
+            |((location & edgeMasks[3]) << 1)
+            |((location & edgeMasks[1]) >> 8)
+            |((location & edgeMasks[1] & edgeMasks[2]) >> 9)
+            |((location & edgeMasks[1] & edgeMasks[3]) >> 7)
+        );
+        location <<= 1;
+        if (location == 0) { location += 1; };
+    }
+};
+
+void Game::initKnightLookupTable(){
+    unsigned long long location = 1;
+    unsigned long long doubleNorthEdge = edgeMasks[0] >> 8;
+    unsigned long long doubleSouthEdge = edgeMasks[1] << 8;
+    unsigned long long doubleLeftEdge = (edgeMasks[2] << 1) & edgeMasks[2];
+    unsigned long long doubleRightEdge = (edgeMasks[3] >> 1) & edgeMasks[3];
+    for(int i = 0; i < 64; i++) {
+        knightMovesTable[i] = (
+            ((location & doubleNorthEdge & edgeMasks[3]) << 17)
+            |((location & doubleNorthEdge & edgeMasks[2]) << 15)
+            |((location & doubleRightEdge & edgeMasks[0]) << 10)
+            |((location & doubleLeftEdge & edgeMasks[0]) << 6)
+            |((location & doubleRightEdge & edgeMasks[1]) >> 6)
+            |((location & doubleLeftEdge & edgeMasks[1]) >> 10)
+            |((location & doubleSouthEdge & edgeMasks[3]) >> 15)
+            |((location & doubleSouthEdge & edgeMasks[2]) >> 17)
+        );
+        location <<= 1;
+    }
+};
+
+void Game::setBitBoards() {
     pieceLocations[0] =  0b11111111'11111111'00000000'00000000'00000000'00000000'11111111'11111111; // All Pieces
     pieceLocations[1] =  0b00000000'00000000'00000000'00000000'00000000'00000000'11111111'11111111; // White Pieces
     pieceLocations[2] =  0b00000000'00000000'00000000'00000000'00000000'00000000'11111111'00000000; // White Pawns
     pieceLocations[3] =  0b00000000'00000000'00000000'00000000'00000000'00000000'00000000'00001000; // White King
-    pieceLocations[4] =  0b00001000'00000000'00000000'00000000'00000000'00000000'00000000'00010000; // White Queens
+    pieceLocations[4] =  0b00000000'00000000'00000000'00000000'00000000'00000000'00000000'00010000; // White Queens
     pieceLocations[5] =  0b00000000'00000000'00000000'00000000'00000000'00000000'00000000'00100100; // White Bishops
     pieceLocations[6] =  0b00000000'00000000'00000000'00000000'00000000'00000000'00000000'01000010; // White Knights
     pieceLocations[7] =  0b00000000'00000000'00000000'00000000'00000000'00000000'00000000'10000001; // White Rooks
@@ -22,8 +223,8 @@ Game::Game() {
     
     edgeMasks[0] = 0b0000000011111111111111111111111111111111111111111111111111111111; // Remove 8th Rank
     edgeMasks[1] = 0b1111111111111111111111111111111111111111111111111111111100000000; // Remove 1st Rank
-    edgeMasks[2] = 0b1111111011111110111111101111111011111110111111101111111011111110; // Remove A Column
-    edgeMasks[3] = 0b0111111101111111011111110111111101111111011111110111111101111111; // Remove H Column
+    edgeMasks[2] = 0b1111111011111110111111101111111011111110111111101111111011111110; // Remove A File
+    edgeMasks[3] = 0b0111111101111111011111110111111101111111011111110111111101111111; // Remove H File
 
     cardinalMasks[0] =  0b0000000000000001000000010000000100000001000000010000000101111110;
     cardinalMasks[1] =  0b0000000000000010000000100000001000000010000000100000001001111100;
@@ -168,5 +369,5 @@ Game::Game() {
     diagonalMasks[61] = 0b0000000001010000000010000000010000000010000000000000000000000000;
     diagonalMasks[62] = 0b0000000000100000000100000000100000000100000000100000000000000000;
     diagonalMasks[63] = 0b0000000001000000001000000001000000001000000001000000001000000000;
-  
-}  
+
+};
