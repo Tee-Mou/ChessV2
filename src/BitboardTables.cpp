@@ -17,12 +17,12 @@ void Game::initMagicLookupTable() {
 
 void Game::initSliderAttacksLookupTable(bool bishop) {
     for (int square = 0; square < 64; square++) {
-        unsigned long long mask = bishop ? diagonalMasks[square] : cardinalMasks[square];
+        u64 mask = bishop ? diagonalMasks[square] : cardinalMasks[square];
         int relevantBits = bishop ? relevantBitsBishop[square] : relevantBitsRook[square];
         int occupancyIndices = (1 << relevantBits);
-        unsigned long long magicNum = bishop ? bishopMagics[square] : rookMagics[square];
+        u64 magicNum = bishop ? bishopMagics[square] : rookMagics[square];
         for (int i=0; i < occupancyIndices; i++) {
-            unsigned long long occupancy = initBlockersPermutation(i, relevantBits, mask);
+            u64 occupancy = initBlockersPermutation(i, relevantBits, mask);
             int magicIndex = (int)((occupancy * magicNum) >> (64 - relevantBits));
             if (bishop) {
                 bishopAttacks[square][magicIndex] = initBishopAttacksForPosition(square, occupancy);
@@ -34,8 +34,8 @@ void Game::initSliderAttacksLookupTable(bool bishop) {
     }
 }
 
-unsigned long long Game::initBlockersPermutation(int index, int relevantBits, unsigned long long mask) {
-    unsigned long long blockers = 0ULL;
+u64 Game::initBlockersPermutation(int index, int relevantBits, u64 mask) {
+    u64 blockers = 0ULL;
     for (int count = 0; count < relevantBits; count++)
     {
         int square = BitOps::countTrailingZeroes(mask);
@@ -48,11 +48,11 @@ unsigned long long Game::initBlockersPermutation(int index, int relevantBits, un
     return blockers;
 }
 
-unsigned long long Game::initMagicAttacks(int square, bool bishop) {
-    unsigned long long occupancies[4096];
-    unsigned long long attacks[4096];
-    unsigned long long usedAttacks[4096];
-    unsigned long long mask = bishop ? diagonalMasks[square] : cardinalMasks[square];
+u64 Game::initMagicAttacks(int square, bool bishop) {
+    u64 occupancies[4096];
+    u64 attacks[4096];
+    u64 usedAttacks[4096];
+    u64 mask = bishop ? diagonalMasks[square] : cardinalMasks[square];
     int relevantBits = bishop ? relevantBitsBishop[square] : relevantBitsRook[square];
     int occupancyIndices = 1 << relevantBits;
     for (int i = 0; i < occupancyIndices; i++) {
@@ -61,13 +61,13 @@ unsigned long long Game::initMagicAttacks(int square, bool bishop) {
     }
 
     for (int tries = 0; tries < 100000000; tries++) {
-        unsigned long long magicNumber = BitOps::generateMagicNumber();
+        u64 magicNumber = BitOps::generateMagicNumber();
         if (BitOps::countSetBits((mask*magicNumber) & 0xFF00000000000000) < 6) { continue; }
         std::memset(usedAttacks, 0ULL, sizeof(usedAttacks));
         int index, fail;
         for (index = 0, fail = 0; !fail && index < occupancyIndices; index++) {
             int magicIndex = (int)((occupancies[index]*magicNumber) >> (64 - relevantBits));
-            unsigned long long attackPattern = usedAttacks[magicIndex];
+            u64 attackPattern = usedAttacks[magicIndex];
             if (attackPattern == 0ULL) {
                 (usedAttacks[magicIndex]) = attacks[index];
             }
@@ -80,39 +80,39 @@ unsigned long long Game::initMagicAttacks(int square, bool bishop) {
     return 0ULL;
 }
 
-unsigned long long Game::initBishopAttacksForPosition(int square, unsigned long long blockers) {
-    unsigned long long attacks = 0;
-    unsigned long long pos = 1ULL << square;
-    unsigned long long mask;
+u64 Game::initBishopAttacksForPosition(int square, u64 blockers) {
+    u64 attacks = 0;
+    u64 pos = 1ULL << square;
+    u64 mask;
     // North-East
     mask = edgeMasks[0] & edgeMasks[3];
-    unsigned long long neAttacks = pos;
+    u64 neAttacks = pos;
     while (true) {
-        unsigned long long tmp = neAttacks;
+        u64 tmp = neAttacks;
         neAttacks |= (neAttacks & mask) << 9;
         if ((blockers & neAttacks) || tmp == neAttacks) { break; }
     };
     // North-West
     mask = edgeMasks[0] & edgeMasks[2];
-    unsigned long long nwAttacks = pos;
+    u64 nwAttacks = pos;
     while (true) {
-        unsigned long long tmp = nwAttacks;
+        u64 tmp = nwAttacks;
         nwAttacks |= (nwAttacks & mask) << 7;
         if ((blockers & nwAttacks) || tmp == nwAttacks) { break; }
     };
     // South-East
     mask = edgeMasks[1] & edgeMasks[3];
-    unsigned long long seAttacks = pos;
+    u64 seAttacks = pos;
     while (true) {
-        unsigned long long tmp = seAttacks;
+        u64 tmp = seAttacks;
         seAttacks |= (seAttacks & mask) >> 7;
         if ((blockers & seAttacks) || tmp == seAttacks) { break; }
     };
     // South-West
     mask = edgeMasks[1] & edgeMasks[2];
-    unsigned long long swAttacks = pos;
+    u64 swAttacks = pos;
     while (true) {
-        unsigned long long tmp = swAttacks;
+        u64 tmp = swAttacks;
         swAttacks |= (swAttacks & mask) >> 9;
         if ((blockers & swAttacks) || tmp == swAttacks) { break; }
     };
@@ -121,39 +121,39 @@ unsigned long long Game::initBishopAttacksForPosition(int square, unsigned long 
     return attacks;
 }
 
-unsigned long long Game::initRookAttacksForPosition(int square, unsigned long long blockers) {
-    unsigned long long attacks = 0;
-    unsigned long long pos = 1ULL << square;
-    unsigned long long mask;
+u64 Game::initRookAttacksForPosition(int square, u64 blockers) {
+    u64 attacks = 0;
+    u64 pos = 1ULL << square;
+    u64 mask;
     // North
     mask = edgeMasks[0];
-    unsigned long long nAttacks = pos;
+    u64 nAttacks = pos;
     while (true) {
-        unsigned long long tmp = nAttacks;
+        u64 tmp = nAttacks;
         nAttacks |= (nAttacks & mask) << 8;
         if (blockers & nAttacks || tmp == nAttacks) { break; }
     };
     // East
     mask = edgeMasks[3];
-    unsigned long long eAttacks = pos;
+    u64 eAttacks = pos;
     while (true) {
-        unsigned long long tmp = eAttacks;
+        u64 tmp = eAttacks;
         eAttacks |= (eAttacks & mask) << 1;
         if (blockers & eAttacks || tmp == eAttacks) { break; }
     };
     // West
     mask = edgeMasks[2];
-    unsigned long long wAttacks = pos;
+    u64 wAttacks = pos;
     while (true) {
-        unsigned long long tmp = wAttacks;
+        u64 tmp = wAttacks;
         wAttacks |= (wAttacks & mask) >> 1;
         if (blockers & wAttacks || tmp == wAttacks) { break; }
     };
     // South
     mask = edgeMasks[1];
-    unsigned long long sAttacks = pos;
+    u64 sAttacks = pos;
     while (true) {
-        unsigned long long tmp = sAttacks;
+        u64 tmp = sAttacks;
         sAttacks |= (sAttacks & mask) >> 8;
         if (blockers & sAttacks || tmp == sAttacks) { break; }
     };
@@ -163,7 +163,7 @@ unsigned long long Game::initRookAttacksForPosition(int square, unsigned long lo
 }
 
 void Game::initKingLookupTable() {
-    unsigned long long location = 0;
+    u64 location = 0;
     for(int i = 0; i < 64; i++) {
         kingMovesTable[i] = (
             ((location & edgeMasks[0]) << 8)
@@ -181,11 +181,11 @@ void Game::initKingLookupTable() {
 };
 
 void Game::initKnightLookupTable(){
-    unsigned long long location = 1;
-    unsigned long long doubleNorthEdge = edgeMasks[0] >> 8;
-    unsigned long long doubleSouthEdge = edgeMasks[1] << 8;
-    unsigned long long doubleLeftEdge = (edgeMasks[2] << 1) & edgeMasks[2];
-    unsigned long long doubleRightEdge = (edgeMasks[3] >> 1) & edgeMasks[3];
+    u64 location = 1;
+    u64 doubleNorthEdge = edgeMasks[0] >> 8;
+    u64 doubleSouthEdge = edgeMasks[1] << 8;
+    u64 doubleLeftEdge = (edgeMasks[2] << 1) & edgeMasks[2];
+    u64 doubleRightEdge = (edgeMasks[3] >> 1) & edgeMasks[3];
     for(int i = 0; i < 64; i++) {
         knightMovesTable[i] = (
             ((location & doubleNorthEdge & edgeMasks[3]) << 17)
@@ -204,22 +204,24 @@ void Game::initKnightLookupTable(){
 void Game::setBitBoards() {
     pieceLocations[0] =  0b11111111'11111111'00000000'00000000'00000000'00000000'11111111'11111111; // All Pieces
     pieceLocations[1] =  0b00000000'00000000'00000000'00000000'00000000'00000000'11111111'11111111; // White Pieces
-    pieceLocations[2] =  0b00000000'00000000'00000000'00000000'00000000'00000000'11111111'00000000; // White Pawns
-    pieceLocations[3] =  0b00000000'00000000'00000000'00000000'00000000'00000000'00000000'00001000; // White King
+    pieceLocations[2] =  0b00000000'00000000'00000000'00000000'00000000'00000000'00000000'00001000; // White King
+    pieceLocations[3] =  0b00000000'00000000'00000000'00000000'00000000'00000000'11111111'00000000; // White Pawns
     pieceLocations[4] =  0b00000000'00000000'00000000'00000000'00000000'00000000'00000000'00010000; // White Queens
     pieceLocations[5] =  0b00000000'00000000'00000000'00000000'00000000'00000000'00000000'00100100; // White Bishops
     pieceLocations[6] =  0b00000000'00000000'00000000'00000000'00000000'00000000'00000000'01000010; // White Knights
     pieceLocations[7] =  0b00000000'00000000'00000000'00000000'00000000'00000000'00000000'10000001; // White Rooks
     pieceLocations[8] =  0b11111111'11111111'00000000'00000000'00000000'00000000'00000000'00000000; // Black Pieces
-    pieceLocations[9] =  0b00000000'11111111'00000000'00000000'00000000'00000000'00000000'00000000; // Black Pawns
-    pieceLocations[10] = 0b00001000'00000000'00000000'00000000'00000000'00000000'00000000'00000000; // Black King
+    pieceLocations[9] = 0b00001000'00000000'00000000'00000000'00000000'00000000'00000000'00000000; // Black King
+    pieceLocations[10] =  0b00000000'11111111'00000000'00000000'00000000'00000000'00000000'00000000; // Black Pawns
     pieceLocations[11] = 0b00010000'00000000'00000000'00000000'00000000'00000000'00000000'00000000; // Black Queens
     pieceLocations[12] = 0b00100100'00000000'00000000'00000000'00000000'00000000'00000000'00000000; // Black Bishops
     pieceLocations[13] = 0b01000010'00000000'00000000'00000000'00000000'00000000'00000000'00000000; // Black Knights
     pieceLocations[14] = 0b10000001'00000000'00000000'00000000'00000000'00000000'00000000'00000000; // Black Rooks
 
     pawnMasks[0] = 0b0000000000000000000000000000000000000000000000001111111100000000; // White Original Rank 
-    pawnMasks[1] = 0b0000000011111111000000000000000000000000000000000000000000000000; // Black Original Rank 
+    pawnMasks[1] = 0b0000000011111111000000000000000000000000000000000000000000000000; // Black Original Rank
+    pawnMasks[2] = 0b0000000000000000000000000000000000000000000000000000000000000000; // White en Passant targets
+    pawnMasks[3] = 0b0000000000000000000000000000000000000000000000000000000000000000; // Black en Passant targets
     
     edgeMasks[0] = 0b0000000011111111111111111111111111111111111111111111111111111111; // Remove 8th Rank
     edgeMasks[1] = 0b1111111111111111111111111111111111111111111111111111111100000000; // Remove 1st Rank

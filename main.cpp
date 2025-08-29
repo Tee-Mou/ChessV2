@@ -4,7 +4,7 @@
 
 void main() {
     Game* game = new Game();
-    long long moves = game -> findPseudoLegalMoves();
+    u64 moves = game -> findPseudoLegalMoves();
     std::cout << "Done!" << std::endl;
     getchar();
 }

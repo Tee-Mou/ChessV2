@@ -1,4 +1,5 @@
 #include <iostream>
+using u64 = uint64_t;
 
 class Game{
     public:
@@ -10,25 +11,33 @@ class Game{
             this->initKnightLookupTable();
             this->initSliderAttacksLookupTable(true);
             this->initSliderAttacksLookupTable(false);
+
             std::cout << "Initialised! Starting..." << std::endl;
         };
         ~Game();
 
         void setBitBoards();
-        unsigned long long initBlockersPermutation(int index, int relevantBits, unsigned long long mask);
+        u64 initBlockersPermutation(int index, int relevantBits, u64 mask);
 
         // gamestate checks
-        unsigned long long findBishopMoves(unsigned long long bitboard);
-        unsigned long long findRookMoves(unsigned long long bitboard);
-        unsigned long long findPseudoLegalMoves();
-        unsigned long long findLegalMoves();
-        unsigned long long findAttackedSquares();
-        unsigned long long findAttacksThisSquare(int square);
+        u64 findKingMoves(int square);
+        u64 findPawnMoves(u64 bitboard);
+        u64 findBishopMoves(u64 bitboard);
+        u64 findKnightMoves(u64 bitboard);
+        u64 findRookMoves(u64 bitboard);
+        u64 findPseudoLegalMoves();
+        u64 findLegalMoves();
+        u64 findAttackedSquares();
+        u64 findAttacksThisSquare(int square);
+
+        // take action
+        void doMove(unsigned int move);
+        void undoMove(unsigned int move);
 
         // find magic numbers 
-        unsigned long long initMagicAttacks(int square, bool bishop);
-        unsigned long long initBishopAttacksForPosition(int square, unsigned long long blockers);
-        unsigned long long initRookAttacksForPosition(int square, unsigned long long blockers);
+        u64 initMagicAttacks(int square, bool bishop);
+        u64 initBishopAttacksForPosition(int square, u64 blockers);
+        u64 initRookAttacksForPosition(int square, u64 blockers);
 
         // init basic lookup tables
         void initMagicLookupTable();
@@ -39,14 +48,14 @@ class Game{
         bool isCheck();
 
         //==== bitboards ====//
-        unsigned long long pieceLocations[15];
-        unsigned long long pawnMasks[2]; // Bit Masks for Pawns
-        unsigned long long edgeMasks[4]; // Bit Masks for Kings
-        unsigned long long cardinalMasks[64]; // Bit Masks for Rooks
-        unsigned long long diagonalMasks[64]; // Bit Masks for Bishops
-        unsigned long long kingMovesTable[64]; // Lookup Table for King Moves
-        unsigned long long knightMovesTable[64]; // Lookup Table for Knight Moves
-        unsigned long long bishopMagics[64] = {
+        u64 pieceLocations[15];
+        u64 pawnMasks[2]; // Bit Masks for Pawns
+        u64 edgeMasks[4]; // Bit Masks for Kings
+        u64 cardinalMasks[64]; // Bit Masks for Rooks
+        u64 diagonalMasks[64]; // Bit Masks for Bishops
+        u64 kingMovesTable[64]; // Lookup Table for King Moves
+        u64 knightMovesTable[64]; // Lookup Table for Knight Moves
+        u64 bishopMagics[64] = {
             2468047380310671617,
             13585776195411976,
             4578369138066688,
@@ -112,8 +121,8 @@ class Game{
             432636395929076740,
             9224515668552188544,
         };
-        unsigned long long bishopAttacks[64][512];
-        unsigned long long rookMagics[64] = {
+        u64 bishopAttacks[64][512];
+        u64 rookMagics[64] = {
             612489620193542176,
             594545520093958144,
             72066682473947136,
@@ -179,7 +188,7 @@ class Game{
             2311753986174108705,
             2305861152296411394,
         };
-        unsigned long long rookAttacks[64][4096];
+        u64 rookAttacks[64][4096];
         int relevantBitsBishop[64] = {
             6, 5, 5, 5, 5, 5, 5, 6,
             5, 5, 5, 5, 5, 5, 5, 5,
@@ -200,6 +209,11 @@ class Game{
             11, 10, 10, 10, 10, 10, 10, 11,
             12, 11, 11, 11, 11, 11, 11, 12,
         }; // Lookup Table for Rook Relevant Occupancy
-        
+
+        struct Castles {
+            bool longCastle = true;
+            bool shortCastle = true;
+        } whiteCastles, blackCastles;
+
         bool currentTurn = 1;
 };
