@@ -1,9 +1,24 @@
 #include <iostream>
+#include <iostream>
+#include <vector>
+#include <stdexcept>
 using u64 = uint64_t;
+using uint = unsigned int;
 
-class Game{
+class MoveGen{
     public:
-        Game() {
+
+        struct Castles {
+            bool longCastle = true;
+            bool shortCastle = true;
+        } whiteCastles, blackCastles;
+
+        struct Move {
+            uint data;
+            uint moveScore; // Move score is used to order the evaluation of moves.
+        };
+
+        MoveGen() {
             // std::cout << "Initialising Game..." << std::endl;
             this->setBitBoards();
             // this->initMagicLookupTable();
@@ -14,30 +29,31 @@ class Game{
 
             std::cout << "Initialised! Starting..." << std::endl;
         };
-        ~Game();
+        ~MoveGen();
 
         void setBitBoards();
-        u64 initBlockersPermutation(int index, int relevantBits, u64 mask);
+        u64 initBlockersPermutation(uint index, uint relevantBits, u64 mask);
 
-        // gamestate checks
-        u64 findKingMoves(int square);
-        u64 findPawnMoves(u64 bitboard);
-        u64 findBishopMoves(u64 bitboard);
-        u64 findKnightMoves(u64 bitboard);
-        u64 findRookMoves(u64 bitboard);
-        u64 findPseudoLegalMoves();
-        u64 findLegalMoves();
+        // gamestate moves
+        std::vector<uint> findKingMoves(uint square);
+        std::vector<uint> findPawnMoves(u64 bitboard);
+        std::vector<uint> findBishopMoves(u64 bitboard);
+        std::vector<uint> findKnightMoves(u64 bitboard);
+        std::vector<uint> findRookMoves(u64 bitboard);
+        std::vector<uint> findPseudoLegalMoves();
+        std::vector<Move> findLegalMoves(std::vector<uint> plm);
         u64 findAttackedSquares();
-        u64 findAttacksThisSquare(int square);
+        u64 findAttacksThisSquare(uint square);
 
-        // take action
-        void doMove(unsigned int move);
-        void undoMove(unsigned int move);
+        // verify legal moves
+        void doMove(uint move);
+        void undoMove(uint move);
+        bool checksAreValid(uint move);
 
         // find magic numbers 
-        u64 initMagicAttacks(int square, bool bishop);
-        u64 initBishopAttacksForPosition(int square, u64 blockers);
-        u64 initRookAttacksForPosition(int square, u64 blockers);
+        u64 initMagicAttacks(uint square, bool bishop);
+        u64 initBishopAttacksForPosition(uint square, u64 blockers);
+        u64 initRookAttacksForPosition(uint square, u64 blockers);
 
         // init basic lookup tables
         void initMagicLookupTable();
@@ -49,6 +65,10 @@ class Game{
 
         //==== bitboards ====//
         u64 pieceLocations[15];
+        u64 attackMapWhite = 0b0000000000000000000000000000000000000000000000001111111100000000;
+        u64 defendMapWhite = 0b0000000000000000000000000000000000000000000000001111111100000000;    
+        u64 attackMapBlack = 0b0000000011111111000000000000000000000000000000000000000000000000;
+        u64 defendMapBlack = 0b0000000011111111000000000000000000000000000000000000000000000000;
         u64 pawnMasks[2]; // Bit Masks for Pawns
         u64 edgeMasks[4]; // Bit Masks for Kings
         u64 cardinalMasks[64]; // Bit Masks for Rooks
@@ -189,7 +209,7 @@ class Game{
             2305861152296411394,
         };
         u64 rookAttacks[64][4096];
-        int relevantBitsBishop[64] = {
+        uint relevantBitsBishop[64] = {
             6, 5, 5, 5, 5, 5, 5, 6,
             5, 5, 5, 5, 5, 5, 5, 5,
             5, 5, 7, 7, 7, 7, 5, 5,
@@ -199,7 +219,7 @@ class Game{
             5, 5, 5, 5, 5, 5, 5, 5,
             6, 5, 5, 5, 5, 5, 5, 6,
         }; // Lookup Table for Bishop Relevant Occupancy
-        int relevantBitsRook[64] {
+        uint relevantBitsRook[64] {
             12, 11, 11, 11, 11, 11, 11, 12,
             11, 10, 10, 10, 10, 10, 10, 11,
             11, 10, 10, 10, 10, 10, 10, 11,
@@ -209,11 +229,6 @@ class Game{
             11, 10, 10, 10, 10, 10, 10, 11,
             12, 11, 11, 11, 11, 11, 11, 12,
         }; // Lookup Table for Rook Relevant Occupancy
-
-        struct Castles {
-            bool longCastle = true;
-            bool shortCastle = true;
-        } whiteCastles, blackCastles;
 
         bool currentTurn = 1;
 };

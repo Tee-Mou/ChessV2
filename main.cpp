@@ -1,10 +1,10 @@
 #include <iostream>
-#include "inc/Game.h"
+#include "inc/MoveGen.h"
 #include "inc/BitOps.h"
 
 void main() {
-    Game* game = new Game();
-    u64 moves = game -> findPseudoLegalMoves();
+    MoveGen* mg = new MoveGen();
+    std::vector<uint> moves = mg -> findPseudoLegalMoves();
     std::cout << "Done!" << std::endl;
     getchar();
 }
