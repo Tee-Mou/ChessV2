@@ -1,7 +1,6 @@
 #include <iostream>
 
 class BitOps {
-
     public:
         static int countTrailingZeroes(unsigned long long num);
         static int countSetBits(unsigned long long num);

@@ -2,12 +2,13 @@
 
 class Eval 
 {
-    public: 
-        static uint calculateMoveScore(uint moveData) {
-            uint score;
-            return 1;
+    public:
+        Eval();
+        static uint calculateMoveOrderScore(uint moveData);
+        static bool compareByScore(MoveGen::MoveData &a, MoveGen::MoveData &b) {
+            return a.score < b.score;
         };
-        static bool compareByScore(MoveGen::Move &a, MoveGen::Move &b) {
-            return a.moveScore < b.moveScore;
-        }
+        static float evaluatePosition(Board* board);
+        static float evalAlphaBeta(Board* board, std::vector<MoveGen::MoveData> move, uint ply, float alpha, float beta);
+
 };

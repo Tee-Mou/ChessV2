@@ -4,30 +4,30 @@
 #include "../inc/BitOps.h"
 #include <algorithm>
 
-std::vector<uint> MoveGen::findPseudoLegalMoves() {
+std::vector<uint> MoveGen::findPseudoLegalMoves(Board* board) {
     std::vector<uint> moves;
     std::vector<uint> pseudoLegalMoves;
 
-    u64 pawnLocations = pieceLocations[currentTurn ? 3 : 10];
-    std::vector<uint> pawnMoves = findPawnMoves(pawnLocations);
+    u64 pawnLocations = board->pieceLocations[board->currentTurn ? 3 : 10];
+    std::vector<uint> pawnMoves = findPawnMoves(board, pawnLocations);
 
-    uint kingSquare = BitOps::countTrailingZeroes(pieceLocations[currentTurn ? 2 : 9]);
-    std::vector<uint> kingMoves = findKingMoves(kingSquare);
+    uint kingSquare = BitOps::countTrailingZeroes(board->pieceLocations[board->currentTurn ? 2 : 9]);
+    std::vector<uint> kingMoves = findKingMoves(board, kingSquare);
     // implement castling
 
-    u64 bishopLocations = pieceLocations[currentTurn ? 5 : 12];
-    std::vector<uint> bishopMoves = findBishopMoves(bishopLocations);
+    u64 bishopLocations = board->pieceLocations[board->currentTurn ? 5 : 12];
+    std::vector<uint> bishopMoves = findBishopMoves(board, bishopLocations);
 
-    u64 knightLocations = pieceLocations[currentTurn ? 6 : 13];
+    u64 knightLocations = board->pieceLocations[board->currentTurn ? 6 : 13];
     std::vector<uint> knightMoves = findKnightMoves(knightLocations);
 
-    u64 rookLocations = pieceLocations[currentTurn ? 7 : 14];
-    std::vector<uint> rookMoves = findRookMoves(rookLocations);
+    u64 rookLocations = board->pieceLocations[board->currentTurn ? 7 : 14];
+    std::vector<uint> rookMoves = findRookMoves(board, rookLocations);
 
-    u64 queenLocations = pieceLocations[currentTurn ? 4 : 12];
+    u64 queenLocations = board->pieceLocations[board->currentTurn ? 4 : 12];
     std::vector<uint> queenMoves;
-    std::vector<uint> queenDiagonalMoves = findBishopMoves(queenLocations);
-    std::vector<uint> queenCardinalMoves = findRookMoves(queenLocations);
+    std::vector<uint> queenDiagonalMoves = findBishopMoves(board, queenLocations);
+    std::vector<uint> queenCardinalMoves = findRookMoves(board, queenLocations);
     queenMoves.insert(queenMoves.end(), queenDiagonalMoves.begin(), queenDiagonalMoves.end());
     queenMoves.insert(queenMoves.end(), queenCardinalMoves.begin(), queenCardinalMoves.end());
     
@@ -38,16 +38,16 @@ std::vector<uint> MoveGen::findPseudoLegalMoves() {
         uint oldSquare = move & 0b000000111111;
         uint newSquare = (move & 0b111111000000) >> 6;
         // Prevent capturing own pieces
-        if ((1ULL << newSquare) & pieceLocations[currentTurn ? 1 : 8]) { continue; }
+        if ((1ULL << newSquare) & board->pieceLocations[board->currentTurn ? 1 : 8]) { continue; }
         // Handle capturing
-        if ((1ULL << newSquare) & pieceLocations[currentTurn ? 8 : 1]) {
+        if ((1ULL << newSquare) & board->pieceLocations[board->currentTurn ? 8 : 1]) {
             uint captureValue = 1;
-            if ((1ULL << newSquare) & pieceLocations[(captureValue + 2) + currentTurn ? 8 : 1]) {
+            if ((1ULL << newSquare) & board->pieceLocations[(captureValue + 2) + board->currentTurn ? 8 : 1]) {
                 move += (captureValue << 12);
             }
         }
         // Handle promotion
-        if (oldSquare & pieceLocations[currentTurn ? 3 : 10] && newSquare >= 56) {
+        if (oldSquare & board->pieceLocations[board->currentTurn ? 3 : 10] && newSquare >= 56) {
             // Iterate over each possible promotion
             uint promotionValue = 1;
             move += (promotionValue << 15);
@@ -60,134 +60,142 @@ std::vector<uint> MoveGen::findPseudoLegalMoves() {
     
 }
 
-std::vector<MoveGen::Move> MoveGen::findLegalMoves(std::vector<uint> moveList) {
-    std::vector<MoveGen::Move> legalMoves;
+std::vector<MoveGen::MoveData> MoveGen::findLegalMoves(Board* board, std::vector<uint> moveList) {
+    std::vector<MoveGen::MoveData> legalMoves;
     std::vector<uint>::iterator it;
     for(it = moveList.begin(); it != moveList.end(); ++it) {
         uint move = *it;
-        doMove(move);
-        if (checksAreValid(move)) {
-            Move moveData;
-            moveData.data = move;
-            moveData.moveScore = Eval::calculateMoveScore(move);
+        doMove(board, move);
+        if (checksAreValid(board, move)) {
+            MoveData moveData;
+            moveData.move = move;
+            moveData.score = Eval::calculateMoveOrderScore(move);
             legalMoves.push_back(moveData);
         }
-        undoMove(move);
+        undoMove(board, move);
     }
     std::sort(legalMoves.begin(), legalMoves.end(), Eval::compareByScore);
     return legalMoves;
 }
 
-void MoveGen::doMove(uint move) {
+Board* MoveGen::doMove(Board* board, uint move) {
+    Board newBoard = *board;
     uint oldSquare = (move & 0b00000000000111111);
     uint newSquare = (move & 0b00000111111000000) >> 6;
     uint captured = (move & 0b00111000000000000) >> 12; // 'capture' order (ascending value): P -> Q -> B -> N -> R -> O-O -> O-O-O
     uint promoteTo = (move & 0b11000000000000000) >> 15; // 'promotion' order (ascending value): Q -> B -> N -> R
 
     uint relevantBitboard = 16;
-    for (uint i = currentTurn ? 2 : 9; currentTurn ? i < 8 : i < 15; i++) {
-        if ((1ULL << oldSquare) & pieceLocations[i]) {
+    for (uint i = board->currentTurn ? 2 : 9; board->currentTurn ? i < 8 : i < 15; i++) {
+        if ((1ULL << oldSquare) & board->pieceLocations[i]) {
             relevantBitboard = i;
             break;
         };
     };
     if (0 < captured < 6) { // Handle capturing
-        uint opponentBitboard = captured + 1 + (!currentTurn * 7);
-        pieceLocations[opponentBitboard] &= ~(1ULL << newSquare); // Remove from opponent's piece's board
-        pieceLocations[currentTurn ? 8 : 1] &= ~(1ULL << newSquare); // Remove from opponent's board
+        uint opponentBitboard = captured + 1 + (!board->currentTurn * 7);
+        newBoard.pieceLocations[opponentBitboard] &= ~(1ULL << newSquare); // Remove from opponent's piece's board
+        newBoard.pieceLocations[board->currentTurn ? 8 : 1] &= ~(1ULL << newSquare); // Remove from opponent's board
     }
     else if (6 <= captured <= 7) { // Handle castling
         bool longCastle = captured - 6;
-        uint rookBitboard = currentTurn ? 7 : 14;
-        uint oldRookSquare = 1ULL << ((longCastle ? 0 : 7) + (currentTurn ? 0 : 56));
-        uint newRookSquare = 1ULL << ((longCastle ? 3 : 5) + (!currentTurn ? 0 : 56));
-        pieceLocations[rookBitboard] &= ~oldRookSquare; // Update rook bitboard
-        pieceLocations[rookBitboard] |= newRookSquare;
+        uint rookBitboard = board->currentTurn ? 7 : 14;
+        uint oldRookSquare = 1ULL << ((longCastle ? 0 : 7) + (board->currentTurn ? 0 : 56));
+        uint newRookSquare = 1ULL << ((longCastle ? 3 : 5) + (!board->currentTurn ? 0 : 56));
+        newBoard.pieceLocations[rookBitboard] &= ~oldRookSquare; // Update rook bitboard
+        newBoard.pieceLocations[rookBitboard] |= newRookSquare;
     };
     if (promoteTo != 0) { // Handle promotion
-        uint promotedToBitboard = promoteTo + 3 + (!currentTurn * 7); 
-        pieceLocations[promotedToBitboard] |= (1ULL << newSquare); // Add to new piece's bitboard
+        uint promotedToBitboard = promoteTo + 3 + (!board->currentTurn * 7); 
+        newBoard.pieceLocations[promotedToBitboard] |= (1ULL << newSquare); // Add to new piece's bitboard
         relevantBitboard = 16; // Don't update pawn bitboard with new location
     }
 
     // Add to bitboard for piece type
     try {
-        pieceLocations[relevantBitboard] & ~(1ULL << oldSquare);
-        pieceLocations[relevantBitboard] |= (1ULL << newSquare);
+        newBoard.pieceLocations[relevantBitboard] & ~(1ULL << oldSquare);
+        newBoard.pieceLocations[relevantBitboard] |= (1ULL << newSquare);
     } catch (const std::out_of_range &e) {};
 
     // Add to bitboard for all pieces 
-    pieceLocations[0] & ~(1ULL << oldSquare);
-    pieceLocations[0] |= (1ULL << newSquare);
+    newBoard.pieceLocations[0] & ~(1ULL << oldSquare);
+    newBoard.pieceLocations[0] |= (1ULL << newSquare);
     
     // Add to bitboard for piece's colour
-    pieceLocations[currentTurn ? 1 : 8] & ~(1ULL << oldSquare);
-    pieceLocations[currentTurn ? 1 : 8] |= (1ULL << newSquare);
+    newBoard.pieceLocations[board->currentTurn ? 1 : 8] & ~(1ULL << oldSquare);
+    newBoard.pieceLocations[board->currentTurn ? 1 : 8] |= (1ULL << newSquare);
+    
+    newBoard.currentTurn = !newBoard.currentTurn;
+    return &newBoard;
 }
 
-void MoveGen::undoMove(uint move) {
+Board* MoveGen::undoMove(Board* board, uint move) {
+    Board newBoard = *board;
     uint oldSquare = (move & 0b00000000000111111);
     uint newSquare = (move & 0b00000111111000000) >> 6;
     uint captured = (move & 0b00111000000000000) >> 12; // 'capture' order (ascending value): P -> Q -> B -> N -> R -> O-O -> O-O-O
     uint promoteTo = (move & 0b11000000000000000) >> 15; // 'promotion' order (ascending value): Q -> B -> N -> R
 
     uint relevantBitboard = 16;
-    for (uint i = currentTurn ? 2 : 9; currentTurn ? i < 8 : i < 15; i++) {
-        if ((1ULL << newSquare) & pieceLocations[i]) {
+    for (uint i = board->currentTurn ? 2 : 9; board->currentTurn ? i < 8 : i < 15; i++) {
+        if ((1ULL << newSquare) & board->pieceLocations[i]) {
             relevantBitboard = i;
             break;
         };
     };
     if (0 < captured < 6) { // Handle capturing
-        uint opponentBitboard = captured + 1 + (!currentTurn * 7);
-        pieceLocations[opponentBitboard] |= (1ULL << newSquare); // Remove from opponent's piece's board
-        pieceLocations[currentTurn ? 8 : 1] |= (1ULL << newSquare); // Add to opponent's board
+        uint opponentBitboard = captured + 1 + (!board->currentTurn * 7);
+        newBoard.pieceLocations[opponentBitboard] |= (1ULL << newSquare); // Remove from opponent's piece's board
+        newBoard.pieceLocations[board->currentTurn ? 8 : 1] |= (1ULL << newSquare); // Add to opponent's board
     }
     else if (6 <= captured <= 7) { // Handle castling
         bool longCastle = captured - 6;
-        uint rookBitboard = currentTurn ? 7 : 14;
-        uint oldRookSquare = 1ULL << ((longCastle ? 0 : 7) + (currentTurn ? 0 : 56));
-        uint newRookSquare = 1ULL << ((longCastle ? 3 : 5) + (!currentTurn ? 0 : 56));
-        pieceLocations[rookBitboard] &= ~newRookSquare; // Update rook bitboard
-        pieceLocations[rookBitboard] |= oldRookSquare;
+        uint rookBitboard = board->currentTurn ? 7 : 14;
+        uint oldRookSquare = 1ULL << ((longCastle ? 0 : 7) + (board->currentTurn ? 0 : 56));
+        uint newRookSquare = 1ULL << ((longCastle ? 3 : 5) + (!board->currentTurn ? 0 : 56));
+        newBoard.pieceLocations[rookBitboard] &= ~newRookSquare; // Update rook bitboard
+        newBoard.pieceLocations[rookBitboard] |= oldRookSquare;
     };
     if (promoteTo != 0) { // Handle promotion
-        uint promotedToBitboard = promoteTo + 3 + (!currentTurn * 7); 
-        pieceLocations[promotedToBitboard] &= ~(1ULL << newSquare); // Remove from new piece's bitboard
-        relevantBitboard = currentTurn ? 3 : 10;
+        uint promotedToBitboard = promoteTo + 3 + (!board->currentTurn * 7); 
+        newBoard.pieceLocations[promotedToBitboard] &= ~(1ULL << newSquare); // Remove from new piece's bitboard
+        relevantBitboard = board->currentTurn ? 3 : 10;
     }
 
     // Remove from bitboard for piece type
     try {
-        pieceLocations[relevantBitboard] & ~(1ULL << newSquare);
-        pieceLocations[relevantBitboard] |= (1ULL << oldSquare);
+        newBoard.pieceLocations[relevantBitboard] & ~(1ULL << newSquare);
+        newBoard.pieceLocations[relevantBitboard] |= (1ULL << oldSquare);
     } catch (const std::out_of_range &e) {};
 
     // Add to bitboard for all pieces
-    if (!captured) { pieceLocations[0] & ~(1ULL << newSquare); }
-    pieceLocations[0] |= (1ULL << newSquare);
+    if (!captured) { board->pieceLocations[0] & ~(1ULL << newSquare); }
+    newBoard.pieceLocations[0] |= (1ULL << newSquare);
     
     // Add to bitboard for piece's colour
-    pieceLocations[currentTurn ? 1 : 8] & ~(1ULL << oldSquare);
-    pieceLocations[currentTurn ? 1 : 8] |= (1ULL << newSquare);
+    newBoard.pieceLocations[board->currentTurn ? 1 : 8] & ~(1ULL << oldSquare);
+    newBoard.pieceLocations[board->currentTurn ? 1 : 8] |= (1ULL << newSquare);
+
+    newBoard.currentTurn = !newBoard.currentTurn;
+    return &newBoard;
 }
 
-bool MoveGen::checksAreValid(uint move) {
-    u64 thisKing = pieceLocations[currentTurn ? 2 : 8];
+bool MoveGen::checksAreValid(Board* board, uint move) {
+    u64 thisKing = board->pieceLocations[board->currentTurn ? 2 : 8];
     uint kingSquare = BitOps::countTrailingZeroes(thisKing);
     uint bishopMagicNumber = bishopMagics[kingSquare];
     uint rookMagicNumber = rookMagics[kingSquare];
 
-    u64 enemyPawns = pieceLocations[currentTurn ? 10 : 3];
-    u64 enemyQueens = pieceLocations[currentTurn ? 11 : 4];
-    u64 enemyBishops = pieceLocations[currentTurn ? 12 : 5];
-    u64 enemyKnights = pieceLocations[currentTurn ? 13 : 6];
-    u64 enemyRooks = pieceLocations[currentTurn ? 14 : 7];
+    u64 enemyPawns = board->pieceLocations[board->currentTurn ? 10 : 3];
+    u64 enemyQueens = board->pieceLocations[board->currentTurn ? 11 : 4];
+    u64 enemyBishops = board->pieceLocations[board->currentTurn ? 12 : 5];
+    u64 enemyKnights = board->pieceLocations[board->currentTurn ? 13 : 6];
+    u64 enemyRooks = board->pieceLocations[board->currentTurn ? 14 : 7];
 
-    uint dangerousBishops = bishopAttacks[kingSquare][(pieceLocations[0] & diagonalMasks[kingSquare]) * bishopMagicNumber];
+    uint dangerousBishops = bishopAttacks[kingSquare][(board->pieceLocations[0] & diagonalMasks[kingSquare]) * bishopMagicNumber];
     uint dangerousKnights = knightMovesTable[kingSquare];
-    uint dangerousRooks = rookAttacks[kingSquare][(pieceLocations[0] & cardinalMasks[kingSquare]) * rookMagicNumber];
-    uint dangerousPawns = currentTurn ? (thisKing << 9 | thisKing << 7) : (thisKing >> 9 | thisKing >> 7);
+    uint dangerousRooks = rookAttacks[kingSquare][(board->pieceLocations[0] & cardinalMasks[kingSquare]) * rookMagicNumber];
+    uint dangerousPawns = board->currentTurn ? (thisKing << 9 | thisKing << 7) : (thisKing >> 9 | thisKing >> 7);
     std::vector<uint>::iterator it;
     if (dangerousBishops & (enemyBishops | enemyQueens)) { return false; };
     if (dangerousKnights & enemyKnights) { return false; }; 
@@ -196,7 +204,7 @@ bool MoveGen::checksAreValid(uint move) {
     return true;
 }
 
-std::vector<uint> MoveGen::findKingMoves(uint square) {
+std::vector<uint> MoveGen::findKingMoves(Board* board, uint square) {
     std::vector<uint> kingMoves;
     u64 movesBitboard = kingMovesTable[square];
     while (movesBitboard > 0) {
@@ -204,47 +212,47 @@ std::vector<uint> MoveGen::findKingMoves(uint square) {
         kingMoves.push_back((newSquare << 6) + square);
         movesBitboard ^= (1ULL << newSquare);
     }
-    Castles castles = currentTurn ? blackCastles : whiteCastles;
+    Board::Castles castles = board->currentTurn ? board->blackCastles : board->whiteCastles;
     u64 longCastleMask = 0b00001110;
     u64 shortCastleMask = 0b01100000;
-    if (!currentTurn) { longCastleMask << 56; shortCastleMask << 56; };
-    if (castles.longCastle & !(longCastleMask & pieceLocations[0])) {
-        kingMoves.push_back(((currentTurn ? 2: 58) << 6) + square);
+    if (!board->currentTurn) { longCastleMask << 56; shortCastleMask << 56; };
+    if (castles.longCastle & !(longCastleMask & board->pieceLocations[0])) {
+        kingMoves.push_back(((board->currentTurn ? 2: 58) << 6) + square);
     };
-    if (castles.shortCastle & !(shortCastleMask & pieceLocations[0])) {        
-        kingMoves.push_back(((currentTurn ? 6: 62) << 6) + square);
+    if (castles.shortCastle & !(shortCastleMask & board->pieceLocations[0])) {        
+        kingMoves.push_back(((board->currentTurn ? 6: 62) << 6) + square);
     };
     return kingMoves;
 }
 
-std::vector<uint> MoveGen::findPawnMoves(u64 bitboard) {
+std::vector<uint> MoveGen::findPawnMoves(Board* board, u64 bitboard) {
     std::vector<uint> pawnMoves;
-    u64 originalRank = currentTurn ? pawnMasks[0] : pawnMasks[1];
-    u64 opponentPawns = currentTurn ? pieceLocations[10] : pieceLocations[3];
-    u64 pawnPushes = (currentTurn ? ((bitboard & originalRank) << 8) : ((bitboard & originalRank) >> 8)) & ~pieceLocations[0];
-    u64 movesBitboard = pawnPushes | (((bitboard) << 8) & ~pieceLocations[0]);
+    u64 originalRank = board->currentTurn ? pawnMasks[0] : pawnMasks[1];
+    u64 opponentPawns = board->currentTurn ? board->pieceLocations[10] : board->pieceLocations[3];
+    u64 pawnPushes = (board->currentTurn ? ((bitboard & originalRank) << 8) : ((bitboard & originalRank) >> 8)) & ~board->pieceLocations[0];
+    u64 movesBitboard = pawnPushes | (((bitboard) << 8) & ~board->pieceLocations[0]);
     while (movesBitboard > 0) {
         uint newSquare = BitOps::countTrailingZeroes(movesBitboard);
-        pawnMoves.push_back((newSquare << 6) + currentTurn ? newSquare - 8 : newSquare + 8);
+        pawnMoves.push_back((newSquare << 6) + board->currentTurn ? newSquare - 8 : newSquare + 8);
         movesBitboard ^= (1ULL << newSquare);
     }
-    movesBitboard = currentTurn ? pawnPushes << 8 : pawnPushes >> 8;
+    movesBitboard = board->currentTurn ? pawnPushes << 8 : pawnPushes >> 8;
     while (movesBitboard > 0) {
         uint newSquare = BitOps::countTrailingZeroes(movesBitboard);
-        pawnMoves.push_back((newSquare << 6) + currentTurn ? newSquare - 16 : newSquare + 16);
+        pawnMoves.push_back((newSquare << 6) + board->currentTurn ? newSquare - 16 : newSquare + 16);
         movesBitboard ^= (1ULL << newSquare);
     }
     // Handle captures
-    movesBitboard = (currentTurn ? (bitboard & edgeMasks[2]) << 7 : (bitboard & edgeMasks[2]) >> 9) & opponentPawns;
+    movesBitboard = (board->currentTurn ? (bitboard & edgeMasks[2]) << 7 : (bitboard & edgeMasks[2]) >> 9) & opponentPawns;
     while (movesBitboard > 0) {
         uint newSquare = BitOps::countTrailingZeroes(movesBitboard);
-        pawnMoves.push_back((newSquare << 6) + currentTurn ? newSquare - 7 : newSquare + 9);
+        pawnMoves.push_back((newSquare << 6) + board->currentTurn ? newSquare - 7 : newSquare + 9);
         movesBitboard ^= (1ULL << newSquare);
     }
-    movesBitboard = (currentTurn ? (bitboard & edgeMasks[3]) << 9 : (bitboard & edgeMasks[3]) >> 7) & opponentPawns;
+    movesBitboard = (board->currentTurn ? (bitboard & edgeMasks[3]) << 9 : (bitboard & edgeMasks[3]) >> 7) & opponentPawns;
     while (movesBitboard > 0) {
         uint newSquare = BitOps::countTrailingZeroes(movesBitboard);
-        pawnMoves.push_back((newSquare << 6) + currentTurn ? newSquare - 9 : newSquare + 7);
+        pawnMoves.push_back((newSquare << 6) + board->currentTurn ? newSquare - 9 : newSquare + 7);
         movesBitboard ^= (1ULL << newSquare);
     }
 
@@ -254,13 +262,13 @@ std::vector<uint> MoveGen::findPawnMoves(u64 bitboard) {
     while (pawnsCanEnPassant != 0) {
         square = BitOps::countTrailingZeroes(pawnsCanEnPassant);
         u64 location = 1ULL << square + 1;
-        if (location & pieceLocations[currentTurn ? 10 : 3]); {
-            uint newSquare = square + currentTurn ? 9 : -7;
+        if (location & board->pieceLocations[board->currentTurn ? 10 : 3]); {
+            uint newSquare = square + board->currentTurn ? 9 : -7;
             pawnMoves.push_back((newSquare << 6) + square);
         }
         location >>= 2;
-        if (location & pieceLocations[currentTurn ? 10 : 3]); {
-            uint newSquare = square + currentTurn ? 7 : -9;
+        if (location & board->pieceLocations[board->currentTurn ? 10 : 3]); {
+            uint newSquare = square + board->currentTurn ? 7 : -9;
             pawnMoves.push_back((newSquare << 6) + square);
         }
         pawnsCanEnPassant ^= (1ULL << square);
@@ -268,13 +276,13 @@ std::vector<uint> MoveGen::findPawnMoves(u64 bitboard) {
     return pawnMoves;
 }
 
-std::vector<uint> MoveGen::findBishopMoves(u64 bitboard) {
+std::vector<uint> MoveGen::findBishopMoves(Board* board, u64 bitboard) {
     std::vector<uint> bishopMoves;
     uint square = 0;
     while (bitboard != 0) {
         square += BitOps::countTrailingZeroes(bitboard);
         u64 mask = diagonalMasks[square];
-        u64 relevantSquares = pieceLocations[0] & mask;
+        u64 relevantSquares = board->pieceLocations[0] & mask;
         u64 magicNumber = bishopMagics[square];
         uint shiftIndex = 64 - relevantBitsBishop[square];
         u64 movesBitboard = bishopAttacks[square][(relevantSquares * magicNumber) >> shiftIndex];
@@ -306,13 +314,13 @@ std::vector<uint> MoveGen::findKnightMoves(u64 bitboard) {
     return knightMoves;
 }
 
-std::vector<uint> MoveGen::findRookMoves(u64 bitboard) {
+std::vector<uint> MoveGen::findRookMoves(Board* board, u64 bitboard) {
     std::vector<uint> rookMoves;
     uint square = 0;
     while (bitboard != 0) {
         square += BitOps::countTrailingZeroes(bitboard);
         u64 mask = cardinalMasks[square];
-        u64 relevantSquares = pieceLocations[0] & mask;
+        u64 relevantSquares = board->pieceLocations[0] & mask;
         u64 magicNumber = rookMagics[square];
         uint shiftIndex = 64 - relevantBitsRook[square];
         u64 movesBitboard = rookAttacks[square][(relevantSquares * magicNumber) >> shiftIndex];

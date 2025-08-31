@@ -2,25 +2,22 @@
 #include <iostream>
 #include <vector>
 #include <stdexcept>
+#include "Board.h"
 using u64 = uint64_t;
 using uint = unsigned int;
 
-class MoveGen{
+static class MoveGen{
     public:
 
-        struct Castles {
-            bool longCastle = true;
-            bool shortCastle = true;
-        } whiteCastles, blackCastles;
-
-        struct Move {
-            uint data;
-            uint moveScore; // Move score is used to order the evaluation of moves.
+        struct MoveData {
+            uint move;
+            uint score; // Move score is used to order the evaluation of moves.
+            uint eval; // The board evaluation if this move is played.
         };
 
         MoveGen() {
             // std::cout << "Initialising Game..." << std::endl;
-            this->setBitBoards();
+            this->setBitboards();
             // this->initMagicLookupTable();
             this->initKingLookupTable();
             this->initKnightLookupTable();
@@ -31,51 +28,43 @@ class MoveGen{
         };
         ~MoveGen();
 
-        void setBitBoards();
-        u64 initBlockersPermutation(uint index, uint relevantBits, u64 mask);
+        void setBitboards();
+        static u64 initBlockersPermutation(uint index, uint relevantBits, u64 mask);
 
         // gamestate moves
-        std::vector<uint> findKingMoves(uint square);
-        std::vector<uint> findPawnMoves(u64 bitboard);
-        std::vector<uint> findBishopMoves(u64 bitboard);
-        std::vector<uint> findKnightMoves(u64 bitboard);
-        std::vector<uint> findRookMoves(u64 bitboard);
-        std::vector<uint> findPseudoLegalMoves();
-        std::vector<Move> findLegalMoves(std::vector<uint> plm);
-        u64 findAttackedSquares();
-        u64 findAttacksThisSquare(uint square);
+        static std::vector<uint> findKingMoves(Board* board, uint square);
+        static std::vector<uint> findPawnMoves(Board* board, u64 bitboard);
+        static std::vector<uint> findBishopMoves(Board* board, u64 bitboard);
+        static std::vector<uint> findKnightMoves(u64 bitboard);
+        static std::vector<uint> findRookMoves(Board* board, u64 bitboard);
+        static std::vector<uint> findPseudoLegalMoves(Board* board);
+        static std::vector<MoveData> findLegalMoves(Board* board, std::vector<uint> plm);
+        static u64 findAttackedSquares();
+        static u64 findAttacksThisSquare(uint square);
 
         // verify legal moves
-        void doMove(uint move);
-        void undoMove(uint move);
-        bool checksAreValid(uint move);
+        static Board* doMove(Board* board, uint move);
+        static Board* undoMove(Board* board, uint move);
+        static bool checksAreValid(Board* board, uint move);
 
         // find magic numbers 
-        u64 initMagicAttacks(uint square, bool bishop);
-        u64 initBishopAttacksForPosition(uint square, u64 blockers);
-        u64 initRookAttacksForPosition(uint square, u64 blockers);
+        static u64 initMagicAttacks(uint square, bool bishop);
+        static u64 initBishopAttacksForPosition(uint square, u64 blockers);
+        static u64 initRookAttacksForPosition(uint square, u64 blockers);
 
         // init basic lookup tables
-        void initMagicLookupTable();
-        void initKingLookupTable();
-        void initKnightLookupTable();
-        void initSliderAttacksLookupTable(bool bishop);
+        static void initMagicLookupTable();
+        static void initKingLookupTable();
+        static void initKnightLookupTable();
+        static void initSliderAttacksLookupTable(bool bishop);
 
-        bool isCheck();
-
-        //==== bitboards ====//
-        u64 pieceLocations[15];
-        u64 attackMapWhite = 0b0000000000000000000000000000000000000000000000001111111100000000;
-        u64 defendMapWhite = 0b0000000000000000000000000000000000000000000000001111111100000000;    
-        u64 attackMapBlack = 0b0000000011111111000000000000000000000000000000000000000000000000;
-        u64 defendMapBlack = 0b0000000011111111000000000000000000000000000000000000000000000000;
-        u64 pawnMasks[2]; // Bit Masks for Pawns
-        u64 edgeMasks[4]; // Bit Masks for Kings
-        u64 cardinalMasks[64]; // Bit Masks for Rooks
-        u64 diagonalMasks[64]; // Bit Masks for Bishops
-        u64 kingMovesTable[64]; // Lookup Table for King Moves
-        u64 knightMovesTable[64]; // Lookup Table for Knight Moves
-        u64 bishopMagics[64] = {
+        static u64 pawnMasks[2]; // Bit Masks for Pawns
+        static u64 edgeMasks[4]; // Bit Masks for Kings
+        static u64 cardinalMasks[64]; // Bit Masks for Rooks
+        static u64 diagonalMasks[64]; // Bit Masks for Bishops
+        static u64 kingMovesTable[64]; // Lookup Table for King Moves
+        static u64 knightMovesTable[64]; // Lookup Table for Knight Moves
+        static constexpr u64 bishopMagics[64] = {
             2468047380310671617,
             13585776195411976,
             4578369138066688,
@@ -141,8 +130,8 @@ class MoveGen{
             432636395929076740,
             9224515668552188544,
         };
-        u64 bishopAttacks[64][512];
-        u64 rookMagics[64] = {
+        static u64 bishopAttacks[64][512];
+        static constexpr u64 rookMagics[64] = {
             612489620193542176,
             594545520093958144,
             72066682473947136,
@@ -208,8 +197,8 @@ class MoveGen{
             2311753986174108705,
             2305861152296411394,
         };
-        u64 rookAttacks[64][4096];
-        uint relevantBitsBishop[64] = {
+        static u64 rookAttacks[64][4096];
+        static constexpr uint relevantBitsBishop[64] = {
             6, 5, 5, 5, 5, 5, 5, 6,
             5, 5, 5, 5, 5, 5, 5, 5,
             5, 5, 7, 7, 7, 7, 5, 5,
@@ -219,7 +208,7 @@ class MoveGen{
             5, 5, 5, 5, 5, 5, 5, 5,
             6, 5, 5, 5, 5, 5, 5, 6,
         }; // Lookup Table for Bishop Relevant Occupancy
-        uint relevantBitsRook[64] {
+        static constexpr uint relevantBitsRook[64] = {
             12, 11, 11, 11, 11, 11, 11, 12,
             11, 10, 10, 10, 10, 10, 10, 11,
             11, 10, 10, 10, 10, 10, 10, 11,
@@ -230,5 +219,4 @@ class MoveGen{
             12, 11, 11, 11, 11, 11, 11, 12,
         }; // Lookup Table for Rook Relevant Occupancy
 
-        bool currentTurn = 1;
 };

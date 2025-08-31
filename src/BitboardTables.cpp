@@ -3,17 +3,17 @@
 #include <random>
 
 
-void MoveGen::initMagicLookupTable() {
-    for (uint square = 0; square < 64; square++) {
-        // Generate magic number hashes for Bishops
-        bishopMagics[square] = initMagicAttacks(square, true);
-        // And the same for Rooks
-        rookMagics[square] = initMagicAttacks(square, false);
-    }
-    for (uint i = 0; i < 64; i++) { std::cout << bishopMagics[i] << "," << std::endl; }
-        std::cout << "\n\n" << std::endl;
-    for (uint i = 0; i < 64; i++) { std::cout << rookMagics[i] << "," << std::endl; }
-}
+// void MoveGen::initMagicLookupTable() {
+//     for (uint square = 0; square < 64; square++) {
+//         // Generate magic number hashes for Bishops
+//         bishopMagics[square] = initMagicAttacks(square, true);
+//         // And the same for Rooks
+//         rookMagics[square] = initMagicAttacks(square, false);
+//     }
+//     for (uint i = 0; i < 64; i++) { std::cout << bishopMagics[i] << "," << std::endl; }
+//         std::cout << "\n\n" << std::endl;
+//     for (uint i = 0; i < 64; i++) { std::cout << rookMagics[i] << "," << std::endl; }
+// }
 
 void MoveGen::initSliderAttacksLookupTable(bool bishop) {
     for (uint square = 0; square < 64; square++) {
@@ -201,22 +201,7 @@ void MoveGen::initKnightLookupTable(){
     }
 };
 
-void MoveGen::setBitBoards() {
-    pieceLocations[0] =  0b11111111'11111111'00000000'00000000'00000000'00000000'11111111'11111111; // All Pieces
-    pieceLocations[1] =  0b00000000'00000000'00000000'00000000'00000000'00000000'11111111'11111111; // White Pieces
-    pieceLocations[2] =  0b00000000'00000000'00000000'00000000'00000000'00000000'00000000'00001000; // White King
-    pieceLocations[3] =  0b00000000'00000000'00000000'00000000'00000000'00000000'11111111'00000000; // White Pawns
-    pieceLocations[4] =  0b00000000'00000000'00000000'00000000'00000000'00000000'00000000'00010000; // White Queens
-    pieceLocations[5] =  0b00000000'00000000'00000000'00000000'00000000'00000000'00000000'00100100; // White Bishops
-    pieceLocations[6] =  0b00000000'00000000'00000000'00000000'00000000'00000000'00000000'01000010; // White Knights
-    pieceLocations[7] =  0b00000000'00000000'00000000'00000000'00000000'00000000'00000000'10000001; // White Rooks
-    pieceLocations[8] =  0b11111111'11111111'00000000'00000000'00000000'00000000'00000000'00000000; // Black Pieces
-    pieceLocations[9] = 0b00001000'00000000'00000000'00000000'00000000'00000000'00000000'00000000; // Black King
-    pieceLocations[10] =  0b00000000'11111111'00000000'00000000'00000000'00000000'00000000'00000000; // Black Pawns
-    pieceLocations[11] = 0b00010000'00000000'00000000'00000000'00000000'00000000'00000000'00000000; // Black Queens
-    pieceLocations[12] = 0b00100100'00000000'00000000'00000000'00000000'00000000'00000000'00000000; // Black Bishops
-    pieceLocations[13] = 0b01000010'00000000'00000000'00000000'00000000'00000000'00000000'00000000; // Black Knights
-    pieceLocations[14] = 0b10000001'00000000'00000000'00000000'00000000'00000000'00000000'00000000; // Black Rooks
+void MoveGen::setBitboards() {
 
     pawnMasks[0] = 0b0000000000000000000000000000000000000000000000001111111100000000; // White Original Rank 
     pawnMasks[1] = 0b0000000011111111000000000000000000000000000000000000000000000000; // Black Original Rank
