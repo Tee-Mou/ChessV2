@@ -89,12 +89,13 @@ std::vector<MoveGen::MoveData> MoveGen::findLegalMoves(Board* board, std::vector
     return legalMoves;
 }
 
-Board* MoveGen::doMove(Board* board, uint move) {
-    Board newBoard = *board;
+void MoveGen::doMove(Board* board, uint move) {
     uint oldSquare = (move & 0b000000000000111111);
     uint newSquare = (move & 0b000000111111000000) >> 6;
     uint captured = (move & 0b000111000000000000) >> 12; // 'capture' order (ascending value): None -> P -> B -> N -> R -> -> Q -> O-O -> O-O-O
     uint promoteTo = (move & 0b111000000000000000) >> 15; // 'promotion' order (ascending value): None -> B -> N -> R -> Q
+
+    
 
     uint relevantBitboard = 16; // Out of range by default
     for (uint i = board->currentTurn ? 2 : 9; board->currentTurn ? i < 8 : i < 15; i++) {
@@ -105,11 +106,11 @@ Board* MoveGen::doMove(Board* board, uint move) {
     };
     if (0 < captured < 6) { // Handle capturing
         uint opponentBitboard = captured + 1 + (!board->currentTurn * 7);
-        newBoard.pieceLocations[opponentBitboard] &= ~(1ULL << newSquare); // Remove from opponent's piece's board
-        newBoard.pieceLocations[board->currentTurn ? 8 : 1] &= ~(1ULL << newSquare); // Remove from opponent's board
+        board->pieceLocations[opponentBitboard] &= ~(1ULL << newSquare); // Remove from opponent's piece's board
+        board->pieceLocations[board->currentTurn ? 8 : 1] &= ~(1ULL << newSquare); // Remove from opponent's board
         // Update Zobrist hash
         u64 zobristNumber = zobristPseudoRandoms[12 * newSquare + (opponentBitboard - (2 + opponentBitboard > 7 ? 1 : 0))];
-        newBoard.zobristHash^=zobristNumber;
+        board->zobristHash^=zobristNumber;
 
     }
     else if (6 <= captured <= 7) { // Handle castling
@@ -117,48 +118,46 @@ Board* MoveGen::doMove(Board* board, uint move) {
         uint rookBitboard = board->currentTurn ? 6 : 13;
         uint oldRookSquare = 1ULL << ((longCastle ? 0 : 7) + (board->currentTurn ? 0 : 56));
         uint newRookSquare = 1ULL << ((longCastle ? 3 : 5) + (!board->currentTurn ? 0 : 56));
-        newBoard.pieceLocations[rookBitboard] &= ~oldRookSquare; // Update rook bitboard
-        newBoard.pieceLocations[rookBitboard] |= newRookSquare;
+        board->pieceLocations[rookBitboard] &= ~oldRookSquare; // Update rook bitboard
+        board->pieceLocations[rookBitboard] |= newRookSquare;
         // Update Zobrist hash
         u64 zobristNumberRemove = zobristPseudoRandoms[12 * oldRookSquare + (rookBitboard - (2 + rookBitboard > 7 ? 1 : 0))];
         u64 zobristNumberAdd = zobristPseudoRandoms[12 * newRookSquare + (rookBitboard - (2 + rookBitboard > 7 ? 1 : 0))];
-        newBoard.zobristHash^=zobristNumberRemove;
-        newBoard.zobristHash^=zobristNumberAdd;
+        board->zobristHash^=zobristNumberRemove;
+        board->zobristHash^=zobristNumberAdd;
     };
     if (promoteTo != 0) { // Handle promotion
         uint promotedToBitboard = promoteTo + 3 + (!board->currentTurn * 7); 
-        newBoard.pieceLocations[promotedToBitboard] |= (1ULL << newSquare); // Add to new piece's bitboard
+        board->pieceLocations[promotedToBitboard] |= (1ULL << newSquare); // Add to new piece's bitboard
         relevantBitboard = 16; // Don't update pawn bitboard with new location
         // Update Zobrist Hash
         u64 zobristNumber = zobristPseudoRandoms[12 * newSquare + (promotedToBitboard - (2 + promotedToBitboard > 7 ? 1 : 0))];
-        newBoard.zobristHash^=zobristNumber;
+        board->zobristHash^=zobristNumber;
     }
 
     // Add to bitboard for piece type
     try {
-        newBoard.pieceLocations[relevantBitboard] &= ~(1ULL << oldSquare);
-        newBoard.pieceLocations[relevantBitboard] |= (1ULL << newSquare);
+        board->pieceLocations[relevantBitboard] &= ~(1ULL << oldSquare);
+        board->pieceLocations[relevantBitboard] |= (1ULL << newSquare);
         // Update Zobrist hash
         u64 zobristNumberRemove = zobristPseudoRandoms[12 * oldSquare + (relevantBitboard - (2 + relevantBitboard > 7 ? 1 : 0))];
         u64 zobristNumberAdd = zobristPseudoRandoms[12 * newSquare + (relevantBitboard - (2 + relevantBitboard > 7 ? 1 : 0))];
-        newBoard.zobristHash^=zobristNumberRemove;
-        newBoard.zobristHash^=zobristNumberAdd;
+        board->zobristHash^=zobristNumberRemove;
+        board->zobristHash^=zobristNumberAdd;
     } catch (const std::out_of_range &e) {};
 
     // Add to bitboard for all pieces 
-    newBoard.pieceLocations[0] &= ~(1ULL << oldSquare);
-    newBoard.pieceLocations[0] |= (1ULL << newSquare);
+    board->pieceLocations[0] &= ~(1ULL << oldSquare);
+    board->pieceLocations[0] |= (1ULL << newSquare);
     
     // Add to bitboard for piece's colour
-    newBoard.pieceLocations[board->currentTurn ? 1 : 8] &= ~(1ULL << oldSquare);
-    newBoard.pieceLocations[board->currentTurn ? 1 : 8] |= (1ULL << newSquare);
+    board->pieceLocations[board->currentTurn ? 1 : 8] &= ~(1ULL << oldSquare);
+    board->pieceLocations[board->currentTurn ? 1 : 8] |= (1ULL << newSquare);
     
-    newBoard.currentTurn = !newBoard.currentTurn;
-    return &newBoard;
+    board->currentTurn = !board->currentTurn;
 }
 
-Board* MoveGen::undoMove(Board* board, uint move) {
-    Board newBoard = *board;
+void MoveGen::undoMove(Board* board, uint move) {
     uint oldSquare = (move & 0b00000000000111111);
     uint newSquare = (move & 0b00000111111000000) >> 6;
     uint captured = (move & 0b00111000000000000) >> 12; // 'capture' order (ascending value): P -> Q -> B -> N -> R -> O-O -> O-O-O
@@ -173,8 +172,8 @@ Board* MoveGen::undoMove(Board* board, uint move) {
     };
     if (0 < captured < 6) { // Handle capturing
         uint opponentBitboard = captured + 1 + (!board->currentTurn * 7);
-        newBoard.pieceLocations[opponentBitboard] |= (1ULL << newSquare); // Add to opponent's piece's board
-        newBoard.pieceLocations[board->currentTurn ? 8 : 1] |= (1ULL << newSquare); // Add to opponent's board
+        board->pieceLocations[opponentBitboard] |= (1ULL << newSquare); // Add to opponent's piece's board
+        board->pieceLocations[board->currentTurn ? 8 : 1] |= (1ULL << newSquare); // Add to opponent's board
         
     }
     else if (6 <= captured <= 7) { // Handle castling
@@ -182,44 +181,43 @@ Board* MoveGen::undoMove(Board* board, uint move) {
         uint rookBitboard = board->currentTurn ? 7 : 14;
         uint oldRookSquare = 1ULL << ((longCastle ? 0 : 7) + (board->currentTurn ? 0 : 56));
         uint newRookSquare = 1ULL << ((longCastle ? 3 : 5) + (!board->currentTurn ? 0 : 56));
-        newBoard.pieceLocations[rookBitboard] &= ~newRookSquare; // Update rook bitboard
-        newBoard.pieceLocations[rookBitboard] |= oldRookSquare;
+        board->pieceLocations[rookBitboard] &= ~newRookSquare; // Update rook bitboard
+        board->pieceLocations[rookBitboard] |= oldRookSquare;
         // Update Zobrist hash
         u64 zobristNumberRemove = zobristPseudoRandoms[12 * newRookSquare + (rookBitboard - (2 + rookBitboard > 7 ? 1 : 0))];
         u64 zobristNumberAdd = zobristPseudoRandoms[12 * oldRookSquare + (rookBitboard - (2 + rookBitboard > 7 ? 1 : 0))];
-        newBoard.zobristHash^=zobristNumberRemove;
-        newBoard.zobristHash^=zobristNumberAdd;
+        board->zobristHash^=zobristNumberRemove;
+        board->zobristHash^=zobristNumberAdd;
     };
     if (promoteTo != 0) { // Handle promotion
         uint promotedToBitboard = promoteTo + 3 + (!board->currentTurn * 7); 
-        newBoard.pieceLocations[promotedToBitboard] &= ~(1ULL << newSquare); // Remove from new piece's bitboard
+        board->pieceLocations[promotedToBitboard] &= ~(1ULL << newSquare); // Remove from new piece's bitboard
         relevantBitboard = board->currentTurn ? 3 : 10;
         // Update Zobrist hash
         u64 zobristNumberRemove = zobristPseudoRandoms[12 * newSquare + (promotedToBitboard - (2 + promotedToBitboard > 7 ? 1 : 0))];
-        newBoard.zobristHash^=zobristNumberRemove;
+        board->zobristHash^=zobristNumberRemove;
     }
 
     // Remove from bitboard for piece type
     try {
-        newBoard.pieceLocations[relevantBitboard] &= ~(1ULL << newSquare);
-        newBoard.pieceLocations[relevantBitboard] |= (1ULL << oldSquare);
+        board->pieceLocations[relevantBitboard] &= ~(1ULL << newSquare);
+        board->pieceLocations[relevantBitboard] |= (1ULL << oldSquare);
         // Update Zobrist hash
         u64 zobristNumberRemove = zobristPseudoRandoms[12 * newSquare + (relevantBitboard - (2 + relevantBitboard > 7 ? 1 : 0))];
         u64 zobristNumberAdd = zobristPseudoRandoms[12 * oldSquare + (relevantBitboard- (2 + relevantBitboard > 7 ? 1 : 0))];
-        newBoard.zobristHash^=zobristNumberRemove;
-        newBoard.zobristHash^=zobristNumberAdd;
+        board->zobristHash^=zobristNumberRemove;
+        board->zobristHash^=zobristNumberAdd;
     } catch (const std::out_of_range &e) {};
 
     // Add to bitboard for all pieces
-    if (!captured) { newBoard.pieceLocations[0] &= ~(1ULL << newSquare); }
-    newBoard.pieceLocations[0] |= (1ULL << newSquare);
+    if (!captured) { board->pieceLocations[0] &= ~(1ULL << newSquare); }
+    board->pieceLocations[0] |= (1ULL << newSquare);
     
     // Add to bitboard for piece's colour
-    newBoard.pieceLocations[board->currentTurn ? 1 : 8] |= (1ULL << oldSquare);
-    newBoard.pieceLocations[board->currentTurn ? 1 : 8] &= ~(1ULL << newSquare);
+    board->pieceLocations[board->currentTurn ? 1 : 8] |= (1ULL << oldSquare);
+    board->pieceLocations[board->currentTurn ? 1 : 8] &= ~(1ULL << newSquare);
 
-    newBoard.currentTurn = !newBoard.currentTurn;
-    return &newBoard;
+    board->currentTurn = !board->currentTurn;
 }
 
 bool MoveGen::checksAreValid(Board* board, uint move) {

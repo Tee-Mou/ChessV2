@@ -49,8 +49,8 @@ static class MoveGen{
         static u64 findAttacksThisSquare(uint square);
 
         // verify legal moves
-        static Board* doMove(Board* board, uint move);
-        static Board* undoMove(Board* board, uint move);
+        static void doMove(Board* board, uint move);
+        static void undoMove(Board* board, uint move);
         static bool checksAreValid(Board* board, uint move);
 
         // find magic numbers 

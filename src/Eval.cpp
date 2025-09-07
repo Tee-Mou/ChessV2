@@ -1,6 +1,10 @@
 #include "../inc/Eval.h"
 #include "../inc/BitOps.h"
 
+#define DEFAULT_VALUE_MODIFIER 1
+#define PAWN_CHAIN_VALUE 0.1
+#define PAWN_STACK_VALUE -0.1
+
 uint Eval::calculateMoveOrderScore(Board* board, MoveGen::MoveData moveData) {
     float score = 0;
     // 1 refutation from TT (handled elsewhere)
@@ -45,18 +49,39 @@ float Eval::checkTransposition(u64 hashKey, uint depth, float alpha, float beta)
 
 float Eval::evaluatePosition(Board* board) {
     const int PIECEVALUES[7] = {0, 0, 100, 300, 300, 500, 900};
-    float positionScore = 0;
+    float score = 0;
     for (int i = 3; i < 15; i++) {
         // Assess relative piece value
-        positionScore += BitOps::countSetBits(board->pieceLocations[i]) * PIECEVALUES[((i-1)  % 7)] * (i < 8 ? 1 : -1);
-        // Assess strength of each piece's square
-
-        // Assess pawn structure
-
-        // Assess whether favourable captures exist (attack/defend bitboards)
-
+        if (i == 8 || i == 9) { continue; }
+        u64 bitboard = board->pieceLocations[i];
+        while (bitboard > 0) {
+            uint square = BitOps::countTrailingZeroes(bitboard);
+            float multiplier = DEFAULT_VALUE_MODIFIER;
+            if (i == 5 || i == 12) { HeatMaps::knight[square]; };
+            float pieceValue = PIECEVALUES[((i-1)  % 7)] * (i < 8 ? 1 : -1);
+            score += pieceValue * multiplier;
+            
+            bitboard ^= 1ULL << square;
+        }
     }
-    return positionScore;
+    // Assess pawn structure
+    u64 whitePawnChains = (board->pieceLocations[3] << 9 || board->pieceLocations[3] << 7) && board->pieceLocations[3];
+    u64 blackPawnChains = (board->pieceLocations[10] >> 9 || board->pieceLocations[10] >> 7) && board->pieceLocations[10];
+    score += PAWN_CHAIN_VALUE * BitOps::countSetBits(whitePawnChains);
+    score -= PAWN_CHAIN_VALUE * BitOps::countSetBits(blackPawnChains);
+    u64 whitePawnStacks;
+    u64 blackPawnStacks;
+    for (uint rank = 1; rank < 8; ++rank) {
+        whitePawnStacks |= (board->pieceLocations[3] << rank * 8) & board->pieceLocations[3];
+        blackPawnStacks |= (board->pieceLocations[10] >> rank * 8) & board->pieceLocations[10];
+    }
+    score += PAWN_STACK_VALUE * BitOps::countSetBits(blackPawnChains);
+    score -= PAWN_STACK_VALUE * BitOps::countSetBits(whitePawnStacks);
+
+    // Assess whether favourable captures exist (attack/defend bitboards)
+
+
+    return score;
 };
 
 float Eval::evalAlphaBeta(Board* board, uint depth, float alpha, float beta) {
@@ -76,12 +101,13 @@ float Eval::evalAlphaBeta(Board* board, uint depth, float alpha, float beta) {
         NodeType tpNodeType;
         for (it = moves.begin(); it != moves.end(); ++it) {
             MoveGen::MoveData move = *it;
-            Board* newBoard = MoveGen::doMove(board, move.move);
-            eval = std::max(eval, evalAlphaBeta(newBoard, depth - 1, alpha, beta));
+            MoveGen::doMove(board, move.move);
+            eval = std::max(eval, evalAlphaBeta(board, depth - 1, alpha, beta));
             if (eval >= beta) {
                 killers[currentDepth].addNewKiller(move.move);
                 storeMove = move;
                 tpNodeType = BETA;
+                MoveGen::undoMove(board, move.move);
                 break;
             }
             if (eval > alpha) {
@@ -89,6 +115,7 @@ float Eval::evalAlphaBeta(Board* board, uint depth, float alpha, float beta) {
                 storeMove = move;
                 tpNodeType = EXACT;
             }
+            MoveGen::undoMove(board, move.move);
         }
         Transposition tp;
         tp.init(board->zobristHash, &storeMove, depth, eval, tpNodeType);
@@ -102,12 +129,13 @@ float Eval::evalAlphaBeta(Board* board, uint depth, float alpha, float beta) {
         NodeType tpNodeType;
         for (it = moves.begin(); it != moves.end(); ++it) {
             MoveGen::MoveData move = *it;
-            Board* newBoard = MoveGen::doMove(board, move.move);
-            eval = std::max(eval, evalAlphaBeta(newBoard, depth - 1, alpha, beta));
+            MoveGen::doMove(board, move.move);
+            eval = std::max(eval, evalAlphaBeta(board, depth - 1, alpha, beta));
             if (eval <= alpha) {
                 killers[currentDepth].addNewKiller(move.move);
                 storeMove = move;
                 tpNodeType = ALPHA;
+                MoveGen::undoMove(board, move.move);
                 break;
             }
             if (eval < beta) {
@@ -115,6 +143,7 @@ float Eval::evalAlphaBeta(Board* board, uint depth, float alpha, float beta) {
                 storeMove = move;
                 tpNodeType = EXACT;
             }
+            MoveGen::undoMove(board, move.move);
         }
         Transposition tp;
         tp.init(board->zobristHash, &storeMove, depth, eval, tpNodeType);

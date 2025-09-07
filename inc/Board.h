@@ -1,6 +1,8 @@
 using u64 = unsigned long long;
 using uint = unsigned int;
 
+enum Pieces {King, Pawn, Bishop, Knight, Rook, Queen};
+
 class Board {
     public:
         static struct Castles {
