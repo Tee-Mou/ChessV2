@@ -15,7 +15,7 @@
 //     for (uint i = 0; i < 64; i++) { std::cout << rookMagics[i] << "," << std::endl; }
 // }
 
-void MoveGen::initSliderAttacksLookupTable(bool bishop) {
+void MoveGen::initSliderAttacksLookupTable(MagicPiece bishop) {
     for (uint square = 0; square < 64; square++) {
         u64 mask = bishop ? diagonalMasks[square] : cardinalMasks[square];
         uint relevantBits = bishop ? relevantBitsBishop[square] : relevantBitsRook[square];
@@ -48,7 +48,7 @@ u64 MoveGen::initBlockersPermutation(uint index, uint relevantBits, u64 mask) {
     return blockers;
 }
 
-u64 MoveGen::initMagicAttacks(uint square, bool bishop) {
+u64 MoveGen::initMagicAttacks(uint square, MagicPiece bishop) {
     u64 occupancies[4096];
     u64 attacks[4096];
     u64 usedAttacks[4096];
@@ -205,8 +205,6 @@ void MoveGen::setBitboards() {
 
     pawnMasks[0] = 0b0000000000000000000000000000000000000000000000001111111100000000; // White Original Rank 
     pawnMasks[1] = 0b0000000011111111000000000000000000000000000000000000000000000000; // Black Original Rank
-    pawnMasks[2] = 0b0000000000000000000000000000000000000000000000000000000000000000; // White en Passant targets
-    pawnMasks[3] = 0b0000000000000000000000000000000000000000000000000000000000000000; // Black en Passant targets
     
     edgeMasks[0] = 0b0000000011111111111111111111111111111111111111111111111111111111; // Remove 8th Rank
     edgeMasks[1] = 0b1111111111111111111111111111111111111111111111111111111100000000; // Remove 1st Rank

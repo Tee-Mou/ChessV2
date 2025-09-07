@@ -9,22 +9,28 @@ using uint = unsigned int;
 static class MoveGen{
     public:
 
+        enum MagicPiece{ROOK, BISHOP};
         struct MoveData {
             uint move;
             uint score; // Move score is used to order the evaluation of moves.
+            bool check;
+            uint piece;
             uint eval; // The board evaluation if this move is played.
         };
 
         MoveGen() {
-            // std::cout << "Initialising Game..." << std::endl;
+            // Creating initial position
             this->setBitboards();
+
+            // Initialise lookup tables for piece moves.
             // this->initMagicLookupTable();
             this->initKingLookupTable();
             this->initKnightLookupTable();
-            this->initSliderAttacksLookupTable(true);
-            this->initSliderAttacksLookupTable(false);
+            this->initSliderAttacksLookupTable(BISHOP);
+            this->initSliderAttacksLookupTable(ROOK);
 
-            std::cout << "Initialised! Starting..." << std::endl;
+            // Initialise Zobrist random numbers using LCG.
+            this->generateZobristPsuedoRandoms(8752137612383702536ULL);
         };
         ~MoveGen();
 
@@ -48,7 +54,7 @@ static class MoveGen{
         static bool checksAreValid(Board* board, uint move);
 
         // find magic numbers 
-        static u64 initMagicAttacks(uint square, bool bishop);
+        static u64 initMagicAttacks(uint square, MagicPiece piece);
         static u64 initBishopAttacksForPosition(uint square, u64 blockers);
         static u64 initRookAttacksForPosition(uint square, u64 blockers);
 
@@ -56,8 +62,13 @@ static class MoveGen{
         static void initMagicLookupTable();
         static void initKingLookupTable();
         static void initKnightLookupTable();
-        static void initSliderAttacksLookupTable(bool bishop);
+        static void initSliderAttacksLookupTable(MagicPiece piece);
 
+        // transposition tables
+        static void generateZobristPsuedoRandoms(u64 seed);
+        static u64 calculateZobristHash(Board* board);
+
+        static Eval* evaluator;
         static u64 pawnMasks[2]; // Bit Masks for Pawns
         static u64 edgeMasks[4]; // Bit Masks for Kings
         static u64 cardinalMasks[64]; // Bit Masks for Rooks
@@ -218,5 +229,5 @@ static class MoveGen{
             11, 10, 10, 10, 10, 10, 10, 11,
             12, 11, 11, 11, 11, 11, 11, 12,
         }; // Lookup Table for Rook Relevant Occupancy
-
+        static u64 zobristPseudoRandoms[781];
 };
