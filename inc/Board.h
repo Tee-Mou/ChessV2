@@ -1,14 +1,17 @@
+#include "BitOps.h"
+
 using u64 = unsigned long long;
 using uint = unsigned int;
 
-enum Pieces {King, Pawn, Bishop, Knight, Rook, Queen};
+class Eval;
+
+struct Castles {
+    bool longCastle = true;
+    bool shortCastle = true;
+};
 
 class Board {
     public:
-        static struct Castles {
-            bool longCastle = true;
-            bool shortCastle = true;
-        } whiteCastles, blackCastles;
         
         Board() {
             pieceLocations[0] =  0b11111111'11111111'00000000'00000000'00000000'00000000'11111111'11111111; // All Pieces
@@ -26,10 +29,14 @@ class Board {
             pieceLocations[12] = 0b01000010'00000000'00000000'00000000'00000000'00000000'00000000'00000000; // Black Knights
             pieceLocations[13] = 0b10000001'00000000'00000000'00000000'00000000'00000000'00000000'00000000; // Black Rooks
             pieceLocations[14] = 0b00010000'00000000'00000000'00000000'00000000'00000000'00000000'00000000; // Black Queens
-            zobristHash = MoveGen::calculateZobristHash(this);
+            // Initialise Zobrist random numbers using LCG.
+            this->generateZobristPsuedoRandoms(8752137612383702536ULL);
         };
         ~Board();
-
+        // zobrist hash
+        void generateZobristPsuedoRandoms(u64 seed);
+        u64 calculateZobristHash(Board* board);
+        
         
         u64 pieceLocations[15];
         uint enPassantFiles = 0b00000000;
@@ -38,6 +45,9 @@ class Board {
         u64 attackMapBlack = 0b0000000011111111000000000000000000000000000000000000000000000000;
         u64 defendMapBlack = 0b0000000011111111000000000000000000000000000000000000000000000000;
         u64 zobristHash;
+        Castles whiteCastles, blackCastles; 
+        u64 zobristPseudoRandoms[781];
+        Eval* evaluator;
         
         bool currentTurn = 1;
 };

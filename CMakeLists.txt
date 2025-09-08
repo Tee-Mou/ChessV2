@@ -4,9 +4,10 @@ project(myChess2 CXX)
 # Make executable
 set(SOURCE_FILES_EXE
     main.cpp
+    src/Eval.cpp
     src/BitboardTables.cpp
     src/BitOps.cpp
-    src/MoveGen.cpp
+    src/Board.cpp
 )
 add_executable(myChess2 ${SOURCE_FILES_EXE})
 

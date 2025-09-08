@@ -1,10 +1,8 @@
 #include <iostream>
-#include "inc/MoveGen.h"
-#include "inc/BitOps.h"
+#include "inc/Eval.h"
 
 void main() {
-    MoveGen* mg = new MoveGen();
-    std::vector<uint> moves = mg -> findPseudoLegalMoves();
+    Eval* evaluator = new Eval();
     std::cout << "Done!" << std::endl;
     getchar();
 }

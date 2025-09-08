@@ -1,9 +1,8 @@
-#include "../inc/MoveGen.h"
-#include "../inc/BitOps.h"
+#include "../inc/Eval.h"
 #include <random>
 
 
-// void MoveGen::initMagicLookupTable() {
+// void Eval::initMagicLookupTable() {
 //     for (uint square = 0; square < 64; square++) {
 //         // Generate magic number hashes for Bishops
 //         bishopMagics[square] = initMagicAttacks(square, true);
@@ -15,7 +14,7 @@
 //     for (uint i = 0; i < 64; i++) { std::cout << rookMagics[i] << "," << std::endl; }
 // }
 
-void MoveGen::initSliderAttacksLookupTable(MagicPiece bishop) {
+void Eval::initSliderAttacksLookupTable(MagicPiece bishop) {
     for (uint square = 0; square < 64; square++) {
         u64 mask = bishop ? diagonalMasks[square] : cardinalMasks[square];
         uint relevantBits = bishop ? relevantBitsBishop[square] : relevantBitsRook[square];
@@ -25,16 +24,16 @@ void MoveGen::initSliderAttacksLookupTable(MagicPiece bishop) {
             u64 occupancy = initBlockersPermutation(i, relevantBits, mask);
             uint magicIndex = (uint)((occupancy * magicNum) >> (64 - relevantBits));
             if (bishop) {
-                bishopAttacks[square][magicIndex] = initBishopAttacksForPosition(square, occupancy);
+                this->bishopAttacks[square][magicIndex] = initBishopAttacksForPosition(square, occupancy);
             }
             else {
-                rookAttacks[square][magicIndex] = initRookAttacksForPosition(square, occupancy);
+                this->rookAttacks[square][magicIndex] = initRookAttacksForPosition(square, occupancy);
             }
         } 
     }
 }
 
-u64 MoveGen::initBlockersPermutation(uint index, uint relevantBits, u64 mask) {
+u64 Eval::initBlockersPermutation(uint index, uint relevantBits, u64 mask) {
     u64 blockers = 0ULL;
     for (uint count = 0; count < relevantBits; count++)
     {
@@ -48,7 +47,7 @@ u64 MoveGen::initBlockersPermutation(uint index, uint relevantBits, u64 mask) {
     return blockers;
 }
 
-u64 MoveGen::initMagicAttacks(uint square, MagicPiece bishop) {
+u64 Eval::initMagicAttacks(uint square, MagicPiece bishop) {
     u64 occupancies[4096];
     u64 attacks[4096];
     u64 usedAttacks[4096];
@@ -80,7 +79,7 @@ u64 MoveGen::initMagicAttacks(uint square, MagicPiece bishop) {
     return 0ULL;
 }
 
-u64 MoveGen::initBishopAttacksForPosition(uint square, u64 blockers) {
+u64 Eval::initBishopAttacksForPosition(uint square, u64 blockers) {
     u64 attacks = 0;
     u64 pos = 1ULL << square;
     u64 mask;
@@ -121,7 +120,7 @@ u64 MoveGen::initBishopAttacksForPosition(uint square, u64 blockers) {
     return attacks;
 }
 
-u64 MoveGen::initRookAttacksForPosition(uint square, u64 blockers) {
+u64 Eval::initRookAttacksForPosition(uint square, u64 blockers) {
     u64 attacks = 0;
     u64 pos = 1ULL << square;
     u64 mask;
@@ -162,7 +161,7 @@ u64 MoveGen::initRookAttacksForPosition(uint square, u64 blockers) {
     return attacks;
 }
 
-void MoveGen::initKingLookupTable() {
+void Eval::initKingLookupTable() {
     u64 location = 0;
     for(uint i = 0; i < 64; i++) {
         kingMovesTable[i] = (
@@ -180,7 +179,7 @@ void MoveGen::initKingLookupTable() {
     }
 };
 
-void MoveGen::initKnightLookupTable(){
+void Eval::initKnightLookupTable(){
     u64 location = 1;
     u64 doubleNorthEdge = edgeMasks[0] >> 8;
     u64 doubleSouthEdge = edgeMasks[1] << 8;
@@ -201,7 +200,7 @@ void MoveGen::initKnightLookupTable(){
     }
 };
 
-void MoveGen::setBitboards() {
+void Eval::setBitboards() {
 
     pawnMasks[0] = 0b0000000000000000000000000000000000000000000000001111111100000000; // White Original Rank 
     pawnMasks[1] = 0b0000000011111111000000000000000000000000000000000000000000000000; // Black Original Rank
