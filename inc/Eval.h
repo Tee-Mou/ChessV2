@@ -1,29 +1,27 @@
 #include "Board.h"
 
-#define TRANSPOSITION_CACHE_SIZE 0x3759F22
+#define TRANSPOSITION_CACHE_SIZE 0x222222
 #define INVALID_TRANSPOSITION_EVAL 10101010
 #define DEFAULT_VALUE_MODIFIER 1
 #define PAWN_CHAIN_VALUE 0.1
 #define PAWN_STACK_VALUE -0.1
 
 struct MoveData {
+    MoveData(uint addMove, bool addCheck) : move(addMove), check(addCheck) {};
     uint move;
-    float score; // Move score is used to order the evaluation of moves.
     bool check;
-    uint piece;
-    uint eval; // The board evaluation if this move is played.
+    float score; // Move score is used to order the evaluation of moves.
 };
 
 struct KillerMoves
 {
-    public:
-        void addNewKiller(uint move) {
-            first = second;
-            second = move;
-        };
-        uint first = 0;
-        uint second = 0;
-        uint mPly;
+    void addNewKiller(uint move) {
+        first = second;
+        second = move;
+    };
+    uint first = 0;
+    uint second = 0;
+    uint mPly;
 };
 
 enum NodeType {ALPHA, BETA, EXACT}; 
@@ -58,17 +56,20 @@ class Eval{
 
         enum MagicPiece{ROOK, BISHOP};
 
-        Eval() {
+        Eval(Board* setBoard) : board(setBoard) {
             // Creating initial position
+            std::cout << "initiliasing evaluator" << std::endl;
             this->setBitboards();
-
+            
             // Initialise lookup tables for piece moves.
-            // this->initMagicLookupTable();
+            // initMagicLookupTable();
             initKingLookupTable();
             initKnightLookupTable();
             initSliderAttacksLookupTable(BISHOP);
             initSliderAttacksLookupTable(ROOK);
-
+            
+            
+            std::cout << "initiliased evaluator" << std::endl;
         };
         ~Eval();
 
@@ -76,18 +77,18 @@ class Eval{
         static u64 initBlockersPermutation(uint index, uint relevantBits, u64 mask);
 
         // gamestate moves
-         std::vector<uint> findKingMoves(Board* board, uint square);
-         std::vector<uint> findPawnMoves(Board* board, u64 bitboard);
-         std::vector<uint> findBishopMoves(Board* board, u64 bitboard);
+         std::vector<uint> findKingMoves(uint square);
+         std::vector<uint> findPawnMoves(u64 bitboard);
+         std::vector<uint> findBishopMoves(u64 bitboard);
          std::vector<uint> findKnightMoves(u64 bitboard);
-         std::vector<uint> findRookMoves(Board* board, u64 bitboard);
-         std::vector<uint> findPseudoLegalMoves(Board* board);
-         std::vector<MoveData*> findLegalMoves(Board* board, std::vector<uint> plm);
+         std::vector<uint> findRookMoves(u64 bitboard);
+         std::vector<uint> findPseudoLegalMoves();
+         std::vector<MoveData*> findLegalMoves(std::vector<uint> plm);
         static bool compareByScore(MoveData* a, MoveData* b) {
             return a->score < b->score;
         };
-        static u64 findAttackedSquares();
-        static u64 findAttacksThisSquare(uint square);
+        u64 findAttackedSquares();
+        u64 findAttacksThisSquare(uint square);
 
         // verify legal moves
 
@@ -95,6 +96,7 @@ class Eval{
         u64 initMagicAttacks(uint square, MagicPiece piece);
         u64 initBishopAttacksForPosition(uint square, u64 blockers);
         u64 initRookAttacksForPosition(uint square, u64 blockers);
+        uint calculateMagicHash(uint square, MagicPiece bishop, u64 occupancy);
 
         // init basic lookup tables
         void initMagicLookupTable();
@@ -103,28 +105,32 @@ class Eval{
         void initSliderAttacksLookupTable(MagicPiece piece);
 
         static constexpr int PIECEVALUES[7] = {0, 0, 1, 3, 3, 5, 9};
-        static float evaluatePosition(Board* board);
-        float evalAlphaBeta(Board* board, uint depth, float alpha, float beta);
+        float evaluatePosition();
+        float evalAlphaBeta(uint depth, float alpha, float beta);
 
         void addTransposition(Transposition tp);
         float checkTransposition(u64 hashKey, uint depth, float alpha, float beta);
 
-        static void doMove(Board* board, uint move);
-        static void undoMove(Board* board, uint move);
-        bool checksAreValid(Board* board, uint move);
-        float calculateMoveOrderScore(Board* board, MoveData moveData);
+        void doMove(uint move);
+        void undoMove(uint move);
+        bool checksAreValid(uint move);
+        void calculateMoveOrderScore(MoveData* moveData);
 
-        uint currentDepth;
+        uint currentDepth = 0;
+        uint halfTurn = 0;
         Transposition transpositionCache[TRANSPOSITION_CACHE_SIZE];
-        std::vector<KillerMoves> killers;
+        KillerMoves killers[32];
 
+        uint total = 0;
+
+        Board* board;
         u64 pawnMasks[2]; // Bit Masks for Pawns
-        u64 edgeMasks[4]; // Bit Masks for Kings
+        u64 edgeMasks[4]; // Bit Masks for Edges
         u64 cardinalMasks[64]; // Bit Masks for Rooks
         u64 diagonalMasks[64]; // Bit Masks for Bishops
         u64 kingMovesTable[64]; // Lookup Table for King Moves
         u64 knightMovesTable[64]; // Lookup Table for Knight Moves
-        static constexpr u64 bishopMagics[64] = {
+        u64 bishopMagics[64] = {
             2468047380310671617,
             13585776195411976,
             4578369138066688,
@@ -191,7 +197,7 @@ class Eval{
             9224515668552188544,
         };
         u64 bishopAttacks[64][512];
-        static constexpr u64 rookMagics[64] = {
+        u64 rookMagics[64] = {
             612489620193542176,
             594545520093958144,
             72066682473947136,

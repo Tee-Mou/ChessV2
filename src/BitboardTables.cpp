@@ -2,32 +2,33 @@
 #include <random>
 
 
-// void Eval::initMagicLookupTable() {
-//     for (uint square = 0; square < 64; square++) {
-//         // Generate magic number hashes for Bishops
-//         bishopMagics[square] = initMagicAttacks(square, true);
-//         // And the same for Rooks
-//         rookMagics[square] = initMagicAttacks(square, false);
-//     }
-//     for (uint i = 0; i < 64; i++) { std::cout << bishopMagics[i] << "," << std::endl; }
-//         std::cout << "\n\n" << std::endl;
-//     for (uint i = 0; i < 64; i++) { std::cout << rookMagics[i] << "," << std::endl; }
-// }
+void Eval::initMagicLookupTable() {
+    for (uint square = 0; square < 64; square++) {
+        // Generate magic number hashes for Bishops
+        bishopMagics[square] = initMagicAttacks(square, BISHOP);
+        // And the same for Rooks
+        rookMagics[square] = initMagicAttacks(square, ROOK);
+    }
+    for (uint i = 0; i < 64; i++) { std::cout << bishopMagics[i] << "," << std::endl; }
+        std::cout << "\n\n" << std::endl;
+    for (uint i = 0; i < 64; i++) { std::cout << rookMagics[i] << "," << std::endl; }
+}
 
 void Eval::initSliderAttacksLookupTable(MagicPiece bishop) {
+    std::cout << "init sliders" << std::endl;
     for (uint square = 0; square < 64; square++) {
         u64 mask = bishop ? diagonalMasks[square] : cardinalMasks[square];
         uint relevantBits = bishop ? relevantBitsBishop[square] : relevantBitsRook[square];
         uint occupancyIndices = (1 << relevantBits);
-        u64 magicNum = bishop ? bishopMagics[square] : rookMagics[square];
         for (uint i=0; i < occupancyIndices; i++) {
             u64 occupancy = initBlockersPermutation(i, relevantBits, mask);
-            uint magicIndex = (uint)((occupancy * magicNum) >> (64 - relevantBits));
+            uint magicHash = calculateMagicHash(square, bishop, occupancy);
+            if (occupancy == 4503599627374700) { std::cout << square << ": " << magicHash << std::endl; };
             if (bishop) {
-                this->bishopAttacks[square][magicIndex] = initBishopAttacksForPosition(square, occupancy);
+                bishopAttacks[square][magicHash] = initBishopAttacksForPosition(square, occupancy);
             }
             else {
-                this->rookAttacks[square][magicIndex] = initRookAttacksForPosition(square, occupancy);
+                rookAttacks[square][magicHash] = initRookAttacksForPosition(square, occupancy);
             }
         } 
     }
@@ -44,6 +45,7 @@ u64 Eval::initBlockersPermutation(uint index, uint relevantBits, u64 mask) {
         if (index & (1 << count))
             blockers |= (1ULL << square);
     }
+    if (blockers == 4503599627374700) { std::cout << "found blockers" << std::endl; }
     return blockers;
 }
 
@@ -202,8 +204,8 @@ void Eval::initKnightLookupTable(){
 
 void Eval::setBitboards() {
 
-    pawnMasks[0] = 0b0000000000000000000000000000000000000000000000001111111100000000; // White Original Rank 
-    pawnMasks[1] = 0b0000000011111111000000000000000000000000000000000000000000000000; // Black Original Rank
+    pawnMasks[0] = 0b0000000000000000000000000000000000000000111111110000000000000000; // First Push for White
+    pawnMasks[1] = 0b0000000000000000111111110000000000000000000000000000000000000000; // First Push for Black
     
     edgeMasks[0] = 0b0000000011111111111111111111111111111111111111111111111111111111; // Remove 8th Rank
     edgeMasks[1] = 0b1111111111111111111111111111111111111111111111111111111100000000; // Remove 1st Rank

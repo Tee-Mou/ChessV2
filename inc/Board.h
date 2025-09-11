@@ -3,8 +3,6 @@
 using u64 = unsigned long long;
 using uint = unsigned int;
 
-class Eval;
-
 struct Castles {
     bool longCastle = true;
     bool shortCastle = true;
@@ -14,28 +12,30 @@ class Board {
     public:
         
         Board() {
+            std::cout << "initialising board" << std::endl;
             pieceLocations[0] =  0b11111111'11111111'00000000'00000000'00000000'00000000'11111111'11111111; // All Pieces
             pieceLocations[1] =  0b00000000'00000000'00000000'00000000'00000000'00000000'11111111'11111111; // White Pieces
-            pieceLocations[2] =  0b00000000'00000000'00000000'00000000'00000000'00000000'00000000'00001000; // White King
+            pieceLocations[2] =  0b00000000'00000000'00000000'00000000'00000000'00000000'00000000'00010000; // White King
             pieceLocations[3] =  0b00000000'00000000'00000000'00000000'00000000'00000000'11111111'00000000; // White Pawns
             pieceLocations[4] =  0b00000000'00000000'00000000'00000000'00000000'00000000'00000000'00100100; // White Bishops
             pieceLocations[5] =  0b00000000'00000000'00000000'00000000'00000000'00000000'00000000'01000010; // White Knights
             pieceLocations[6] =  0b00000000'00000000'00000000'00000000'00000000'00000000'00000000'10000001; // White Rooks
-            pieceLocations[7] =  0b00000000'00000000'00000000'00000000'00000000'00000000'00000000'00010000; // White Queens
+            pieceLocations[7] =  0b00000000'00000000'00000000'00000000'00000000'00000000'00000000'00001000; // White Queens
             pieceLocations[8] =  0b11111111'11111111'00000000'00000000'00000000'00000000'00000000'00000000; // Black Pieces
-            pieceLocations[9] =  0b00001000'00000000'00000000'00000000'00000000'00000000'00000000'00000000; // Black King
+            pieceLocations[9] =  0b00010000'00000000'00000000'00000000'00000000'00000000'00000000'00000000; // Black King
             pieceLocations[10] = 0b00000000'11111111'00000000'00000000'00000000'00000000'00000000'00000000; // Black Pawns
             pieceLocations[11] = 0b00100100'00000000'00000000'00000000'00000000'00000000'00000000'00000000; // Black Bishops
             pieceLocations[12] = 0b01000010'00000000'00000000'00000000'00000000'00000000'00000000'00000000; // Black Knights
             pieceLocations[13] = 0b10000001'00000000'00000000'00000000'00000000'00000000'00000000'00000000; // Black Rooks
-            pieceLocations[14] = 0b00010000'00000000'00000000'00000000'00000000'00000000'00000000'00000000; // Black Queens
+            pieceLocations[14] = 0b00001000'00000000'00000000'00000000'00000000'00000000'00000000'00000000; // Black Queens
             // Initialise Zobrist random numbers using LCG.
             this->generateZobristPsuedoRandoms(8752137612383702536ULL);
+            std::cout << "initialised board" << std::endl;
         };
         ~Board();
         // zobrist hash
         void generateZobristPsuedoRandoms(u64 seed);
-        u64 calculateZobristHash(Board* board);
+        u64 calculateZobristHash();
         
         
         u64 pieceLocations[15];
@@ -47,7 +47,7 @@ class Board {
         u64 zobristHash;
         Castles whiteCastles, blackCastles; 
         u64 zobristPseudoRandoms[781];
-        Eval* evaluator;
         
         bool currentTurn = 1;
+        uint turnsTaken = 0;
 };

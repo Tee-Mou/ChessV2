@@ -2,7 +2,10 @@
 #include "inc/Eval.h"
 
 void main() {
-    Eval* evaluator = new Eval();
-    std::cout << "Done!" << std::endl;
+    Board* board = new Board();
+    Eval* evaluator = new Eval(board);
+    float eval = evaluator->evalAlphaBeta(5, -INFINITY, INFINITY);
+    std::cout << board->pieceLocations[0] << std::endl;
+    std::cout << eval << std::endl;
     getchar();
 }

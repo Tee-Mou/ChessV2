@@ -1,30 +1,30 @@
 #include "../inc/Eval.h"
 #include <algorithm>
 
-std::vector<uint> Eval::findPseudoLegalMoves(Board* board) {
+std::vector<uint> Eval::findPseudoLegalMoves() {
     std::vector<uint> moves;
     std::vector<uint> pseudoLegalMoves;
-
+    
     u64 pawnLocations = board->pieceLocations[board->currentTurn ? 3 : 10];
-    std::vector<uint> pawnMoves = findPawnMoves(board, pawnLocations);
-
+    std::vector<uint> pawnMoves = findPawnMoves(pawnLocations);
+    
     uint kingSquare = BitOps::countTrailingZeroes(board->pieceLocations[board->currentTurn ? 2 : 9]);
-    std::vector<uint> kingMoves = findKingMoves(board, kingSquare);
+    std::vector<uint> kingMoves = findKingMoves(kingSquare);
     // implement castling
-
+    
     u64 bishopLocations = board->pieceLocations[board->currentTurn ? 4 : 11];
-    std::vector<uint> bishopMoves = findBishopMoves(board, bishopLocations);
-
+    std::vector<uint> bishopMoves = findBishopMoves(bishopLocations);
+    
     u64 knightLocations = board->pieceLocations[board->currentTurn ? 5 : 12];
     std::vector<uint> knightMoves = findKnightMoves(knightLocations);
-
+    
     u64 rookLocations = board->pieceLocations[board->currentTurn ? 6 : 13];
-    std::vector<uint> rookMoves = findRookMoves(board, rookLocations);
-
+    std::vector<uint> rookMoves = findRookMoves(rookLocations);
+    
     u64 queenLocations = board->pieceLocations[board->currentTurn ? 7 : 14];
     std::vector<uint> queenMoves;
-    std::vector<uint> queenDiagonalMoves = findBishopMoves(board, queenLocations);
-    std::vector<uint> queenCardinalMoves = findRookMoves(board, queenLocations);
+    std::vector<uint> queenDiagonalMoves = findBishopMoves(queenLocations);
+    std::vector<uint> queenCardinalMoves = findRookMoves(queenLocations);
     queenMoves.insert(queenMoves.end(), queenDiagonalMoves.begin(), queenDiagonalMoves.end());
     queenMoves.insert(queenMoves.end(), queenCardinalMoves.begin(), queenCardinalMoves.end());
     
@@ -65,28 +65,32 @@ std::vector<uint> Eval::findPseudoLegalMoves(Board* board) {
     
 }
 
-std::vector<MoveData*> Eval::findLegalMoves(Board* board, std::vector<uint> moveList) {
+std::vector<MoveData*> Eval::findLegalMoves(std::vector<uint> moveList) {
     std::vector<MoveData*> legalMoves;
     std::vector<uint>::iterator it;
     for(it = moveList.begin(); it != moveList.end(); ++it) {
         uint move = *it;
-        Eval::doMove(board, move);
-        if (Eval::checksAreValid(board, move)) {
-            MoveData moveData;
-            moveData.move = move;;
-            moveData.score = board->evaluator->calculateMoveOrderScore(board, moveData);
+    }
+    for(it = moveList.begin(); it != moveList.end(); ++it) {
+        uint move = *it;
+        doMove(move);
+        if (bool valid = checksAreValid(move)) {
+            board->currentTurn = !board->currentTurn;
+            bool check = checksAreValid(move);
+            MoveData* moveData = new MoveData(move, check);
+            this->calculateMoveOrderScore(moveData);
+
+            board->currentTurn = !board->currentTurn;
             Board* tmpBoard = board;
-            tmpBoard->currentTurn = !tmpBoard->currentTurn;
-            moveData.check = Eval::checksAreValid(tmpBoard, move);
-            legalMoves.push_back(&moveData);
+            legalMoves.push_back(moveData);
         }
-        Eval::undoMove(board, move);
+        undoMove(move);
     }
     std::sort(legalMoves.begin(), legalMoves.end(), compareByScore);
     return legalMoves;
 }
 
-std::vector<uint> Eval::findKingMoves(Board* board, uint square) {
+std::vector<uint> Eval::findKingMoves(uint square) {
     std::vector<uint> kingMoves;
     u64 movesBitboard = kingMovesTable[square];
     while (movesBitboard > 0) {
@@ -107,41 +111,32 @@ std::vector<uint> Eval::findKingMoves(Board* board, uint square) {
     return kingMoves;
 }
 
-std::vector<uint> Eval::findPawnMoves(Board* board, u64 bitboard) {
+std::vector<uint> Eval::findPawnMoves(u64 bitboard) {
     std::vector<uint> pawnMoves;
-    u64 originalRank = board->currentTurn ? pawnMasks[0] : pawnMasks[1];
-    u64 opponentPawns = board->currentTurn ? board->pieceLocations[10] : board->pieceLocations[3];
-    u64 pawnPushes = (board->currentTurn ? ((bitboard & originalRank) << 8) : ((bitboard & originalRank) >> 8)) & ~board->pieceLocations[0];
-    u64 movesBitboard = pawnPushes | (((bitboard) << 8) & ~board->pieceLocations[0]);
-    while (movesBitboard > 0) {
-        uint newSquare = BitOps::countTrailingZeroes(movesBitboard);
-        pawnMoves.push_back((newSquare << 6) + board->currentTurn ? newSquare - 8 : newSquare + 8);
-        movesBitboard ^= (1ULL << newSquare);
-    }
-    movesBitboard = board->currentTurn ? pawnPushes << 8 : pawnPushes >> 8;
-    while (movesBitboard > 0) {
-        uint newSquare = BitOps::countTrailingZeroes(movesBitboard);
-        pawnMoves.push_back((newSquare << 6) + board->currentTurn ? newSquare - 16 : newSquare + 16);
-        movesBitboard ^= (1ULL << newSquare);
-    }
-    // Handle captures
-    u64 enPassantSquares = bitboard & (board->enPassantFiles << (board->currentTurn ? 8 : 48));
-    movesBitboard = (board->currentTurn ? (bitboard & edgeMasks[2]) << 7 : (bitboard & edgeMasks[2]) >> 9) & (opponentPawns | enPassantSquares);
-    while (movesBitboard > 0) {
-        uint newSquare = BitOps::countTrailingZeroes(movesBitboard);
-        pawnMoves.push_back((newSquare << 6) + board->currentTurn ? newSquare - 7 : newSquare + 9);
-        movesBitboard ^= (1ULL << newSquare);
-    }
-    movesBitboard = (board->currentTurn ? (bitboard & edgeMasks[3]) << 9 : (bitboard & edgeMasks[3]) >> 7) & (opponentPawns | enPassantSquares);
-    while (movesBitboard > 0) {
-        uint newSquare = BitOps::countTrailingZeroes(movesBitboard);
-        pawnMoves.push_back((newSquare << 6) + board->currentTurn ? newSquare - 9 : newSquare + 7);
-        movesBitboard ^= (1ULL << newSquare);
+    u64 firstPushRank = board->currentTurn ? pawnMasks[0] : pawnMasks[1];
+    u64 opponentPieces = board->currentTurn ? board->pieceLocations[8] : board->pieceLocations[1];
+    while (bitboard != 0) {
+        u64 enPassantBitboard = board->enPassantFiles << (board->currentTurn ? 40 : 16);
+        uint oldSquareIndex = BitOps::countTrailingZeroes(bitboard);
+        u64 oldSquare = 1ULL << oldSquareIndex;
+        u64 newSquares = 0;
+    
+        newSquares |= ~(board->pieceLocations[0]) & (board->currentTurn ? oldSquare << 8 : oldSquare >> 8); // First push
+        newSquares |= ~(board->pieceLocations[0]) & (board->currentTurn ? (firstPushRank & newSquares) << 8 : (firstPushRank & newSquares) >> 8); // Double push
+        newSquares |= (opponentPieces | enPassantBitboard) & (board->currentTurn ? (oldSquare & edgeMasks[2]) << 7 : (oldSquare & edgeMasks[2]) >> 9); // Captures right
+        newSquares |= (opponentPieces | enPassantBitboard) & (board->currentTurn ? (oldSquare & edgeMasks[3]) << 9 : (oldSquare & edgeMasks[2]) >> 7); // Captures left
+
+        while (newSquares != 0) {
+            uint newSquare = BitOps::countTrailingZeroes(newSquares);
+            pawnMoves.push_back((newSquare << 6) + oldSquareIndex);
+            newSquares ^= (1ULL << newSquare);
+        } 
+        bitboard ^= (1ULL << oldSquareIndex);
     }
     return pawnMoves;
 }
 
-std::vector<uint> Eval::findBishopMoves(Board* board, u64 bitboard) {
+std::vector<uint> Eval::findBishopMoves(u64 bitboard) {
     std::vector<uint> bishopMoves;
     uint square = 0;
     while (bitboard != 0) {
@@ -179,11 +174,11 @@ std::vector<uint> Eval::findKnightMoves(u64 bitboard) {
     return knightMoves;
 }
 
-std::vector<uint> Eval::findRookMoves(Board* board, u64 bitboard) {
+std::vector<uint> Eval::findRookMoves(u64 bitboard) {
     std::vector<uint> rookMoves;
     uint square = 0;
     while (bitboard != 0) {
-        square += BitOps::countTrailingZeroes(bitboard);
+        square = BitOps::countTrailingZeroes(bitboard);
         u64 mask = cardinalMasks[square];
         u64 relevantSquares = board->pieceLocations[0] & mask;
         u64 magicNumber = rookMagics[square];
@@ -194,10 +189,19 @@ std::vector<uint> Eval::findRookMoves(Board* board, u64 bitboard) {
             rookMoves.push_back((newSquare << 6) + square);
             movesBitboard ^= (1ULL << newSquare);
         }
-        bitboard >>= (square + 1);
-        square++;
+        bitboard ^= 1ULL << square;
     };
     return rookMoves;
+}
+
+uint Eval::calculateMagicHash(uint square, MagicPiece bishop, u64 occupancy) {
+    uint hash;
+    u64 magicNumber = bishop ? this->bishopMagics[square] : this->rookMagics[square];
+    u64 mask = bishop ? this->diagonalMasks[square] : this->cardinalMasks[square];
+    uint relevantBits = bishop ? this->relevantBitsBishop[square] : this->relevantBitsRook[square]; 
+    u64 blockers = occupancy & mask;
+    hash = (uint)((blockers * magicNumber) >> (64 - relevantBits));
+    return hash;
 }
 
 void Eval::addTransposition(Transposition tp) {
@@ -216,48 +220,51 @@ float Eval::checkTransposition(u64 hashKey, uint depth, float alpha, float beta)
     return INVALID_TRANSPOSITION_EVAL;
 };
 
-float Eval::evaluatePosition(Board* board) {
-    const float PIECEVALUES[7] = {0, 0, 100, 300, 300, 500, 900};
+float Eval::evaluatePosition() {
+    const float PIECEVALUES[7] = {0, 0, 1, 3, 3, 5, 9};
     float score = 0;
     for (int i = 3; i < 15; i++) {
         // Assess relative piece value
         if (i == 8 || i == 9) { continue; }
         u64 bitboard = board->pieceLocations[i];
-        while (bitboard > 0) {
-            uint square = BitOps::countTrailingZeroes(bitboard);
-            float multiplier = DEFAULT_VALUE_MODIFIER;
-            if (i == 5 || i == 12) { HeatMaps::knight[square]; };
-            float pieceValue = PIECEVALUES[((i-1)  % 7)] * (i < 8 ? 1 : -1);
-            score += pieceValue * multiplier;
-            
-            bitboard ^= 1ULL << square;
-        }
+        score += BitOps::countSetBits(bitboard) * PIECEVALUES[((i-1)  % 7)];
+        // while (bitboard > 0) {
+        //     uint square = BitOps::countTrailingZeroes(bitboard);
+        //     float multiplier = DEFAULT_VALUE_MODIFIER;
+        //     if (i == 5 || i == 12) { HeatMaps::knight[square]; };
+        //     float pieceValue = PIECEVALUES[((i-1)  % 7)] * (i < 8 ? 1 : -1);
+        //     score += pieceValue * multiplier;
+        //     bitboard ^= 1ULL << square;
+        // }
     }
     // Assess pawn structure
-    u64 whitePawnChains = (board->pieceLocations[3] << 9 || board->pieceLocations[3] << 7) && board->pieceLocations[3];
-    u64 blackPawnChains = (board->pieceLocations[10] >> 9 || board->pieceLocations[10] >> 7) && board->pieceLocations[10];
-    score += (float)PAWN_CHAIN_VALUE * BitOps::countSetBits(whitePawnChains);
-    score -= (float)PAWN_CHAIN_VALUE * BitOps::countSetBits(blackPawnChains);
-    u64 whitePawnStacks;
-    u64 blackPawnStacks;
-    for (uint rank = 1; rank < 8; ++rank) {
-        whitePawnStacks |= (board->pieceLocations[3] << rank * 8) & board->pieceLocations[3];
-        blackPawnStacks |= (board->pieceLocations[10] >> rank * 8) & board->pieceLocations[10];
-    }
-    score += (float)PAWN_STACK_VALUE * BitOps::countSetBits(blackPawnChains);
-    score -= (float)PAWN_STACK_VALUE * BitOps::countSetBits(whitePawnStacks);
+    // u64 whitePawns = board->pieceLocations[3];
+    // u64 blackPawns = board->pieceLocations[10];
+    // u64 whitePawnChains = ((whitePawns & edgeMasks[2]) << 7 || (whitePawns & edgeMasks[3]) << 9) & whitePawns;
+    // u64 blackPawnChains = ((blackPawns & edgeMasks[3]) >> 7 || (blackPawns & edgeMasks[2]) >> 9) & blackPawns;
+    // score += (float)PAWN_CHAIN_VALUE * BitOps::countSetBits(whitePawnChains);
+    // score -= (float)PAWN_CHAIN_VALUE * BitOps::countSetBits(blackPawnChains);
+    // u64 whitePawnStacks = 0;
+    // u64 blackPawnStacks = 0;
+    // for (uint rank = 1; rank < 8; ++rank) {
+    //     whitePawnStacks |= (whitePawns << rank * 8) & whitePawns;
+    //     blackPawnStacks |= (blackPawns >> rank * 8) & blackPawns;
+    // }
+    // score += (float)PAWN_STACK_VALUE * BitOps::countSetBits(blackPawnStacks);
+    // score -= (float)PAWN_STACK_VALUE * BitOps::countSetBits(whitePawnStacks);
 
     // Assess whether favourable captures exist (attack/defend bitboards)
-
-
     return score;
 };
 
-float Eval::evalAlphaBeta(Board* board, uint depth, float alpha, float beta) {
-    this->currentDepth++;
-    if (depth == 0) { currentDepth = 0; return evaluatePosition(board); };
-    std::vector<MoveData*> moves = Eval::findLegalMoves(board, Eval::findPseudoLegalMoves(board));
-    if (sizeof(moves) == 0) {
+float Eval::evalAlphaBeta(uint depth, float alpha, float beta) {
+    if (depth == 0) { float score = evaluatePosition(); return score; };
+    std::vector<MoveData*> moves = findLegalMoves(findPseudoLegalMoves());
+    std::vector<MoveData*>::iterator iterator;
+    for (iterator = moves.begin(); iterator != moves.end(); ++iterator) {
+        uint move = (*iterator)->move;
+    }
+    if (moves.size() == 0) {
         return INFINITY * board->currentTurn ? 1.0f : -1.0f;
     };
     if (float eval = checkTransposition(board->zobristHash, depth, alpha, beta) != INVALID_TRANSPOSITION_EVAL) {
@@ -266,69 +273,79 @@ float Eval::evalAlphaBeta(Board* board, uint depth, float alpha, float beta) {
     if (board->currentTurn) {
         float eval = -INFINITY;
         std::vector<MoveData*>::iterator it;
-        MoveData storeMove;
+        MoveData* storeMove;
         NodeType tpNodeType;
         for (it = moves.begin(); it != moves.end(); ++it) {
             MoveData move = **it;
-            doMove(board, move.move);
-            eval = std::max(eval, evalAlphaBeta(board, depth - 1, alpha, beta));
+            doMove(move.move);
+            eval = std::max(eval, evalAlphaBeta((depth - 1), alpha, beta));
             if (eval >= beta) {
                 killers[currentDepth].addNewKiller(move.move);
-                storeMove = move;
+                storeMove = &move;
                 tpNodeType = BETA;
-                undoMove(board, move.move);
+                undoMove(move.move);
+                total++;
                 break;
             }
-            if (eval > alpha) {
+            else if (eval > alpha) {
                 alpha = eval;
-                storeMove = move;
+                storeMove = &move;
                 tpNodeType = EXACT;
             }
-            undoMove(board, move.move);
+            else {
+                storeMove = &move;
+                tpNodeType = ALPHA;
+            }
+            total++;
+            undoMove(move.move);
         }
         Transposition tp;
-        tp.init(board->zobristHash, &storeMove, depth, eval, tpNodeType);
+        tp.init(board->zobristHash, storeMove, depth, eval, tpNodeType);
         addTransposition(tp);
         return eval;
     }
     else {
         float eval = INFINITY;
         std::vector<MoveData*>::iterator it;
-        MoveData storeMove;
+        MoveData* storeMove;
         NodeType tpNodeType;
         for (it = moves.begin(); it != moves.end(); ++it) {
             MoveData move = **it;
-            doMove(board, move.move);
-            eval = std::max(eval, evalAlphaBeta(board, depth - 1, alpha, beta));
+            doMove(move.move);
+            eval = std::min(eval, evalAlphaBeta(depth - 1, alpha, beta));
             if (eval <= alpha) {
                 killers[currentDepth].addNewKiller(move.move);
-                storeMove = move;
+                storeMove = &move;
                 tpNodeType = ALPHA;
-                undoMove(board, move.move);
+                undoMove(move.move);
+                total++;
                 break;
             }
-            if (eval < beta) {
+            else if (eval < beta) {
                 beta = eval;
-                storeMove = move;
+                storeMove = &move;
                 tpNodeType = EXACT;
             }
-            undoMove(board, move.move);
+            else {
+                storeMove = &move;
+                tpNodeType = BETA;
+            }
+            total++;
+            undoMove(move.move);
         }
         Transposition tp;
-        tp.init(board->zobristHash, &storeMove, depth, eval, tpNodeType);
+        tp.init(board->zobristHash, storeMove, depth, eval, tpNodeType);
         addTransposition(tp);
         return eval;
     }
         
 };
 
-void Eval::doMove(Board* board, uint move) {
+void Eval::doMove(uint move) {
     uint oldSquare = (move & 0b000000000000111111);
     uint newSquare = (move & 0b000000111111000000) >> 6;
     uint captured = (move & 0b000111000000000000) >> 12; // 'capture' order (ascending value): None -> P -> B -> N -> R -> -> Q -> O-O -> O-O-O
     uint promoteTo = (move & 0b111000000000000000) >> 15; // 'promotion' order (ascending value): None -> B -> N -> R -> Q
-
-    
 
     uint relevantBitboard = 16; // Out of range by default
     for (uint i = board->currentTurn ? 2 : 9; board->currentTurn ? i < 8 : i < 15; i++) {
@@ -346,7 +363,7 @@ void Eval::doMove(Board* board, uint move) {
         board->zobristHash^=zobristNumber;
 
     }
-    else if (captured < 8) { // Handle castling
+    else if (captured > 0 && captured < 8) { // Handle castling
         bool longCastle = captured - 6;
         uint rookBitboard = board->currentTurn ? 6 : 13;
         uint oldRookSquare = 1ULL << ((longCastle ? 0 : 7) + (board->currentTurn ? 0 : 56));
@@ -392,12 +409,13 @@ void Eval::doMove(Board* board, uint move) {
     board->currentTurn = !board->currentTurn;
 }
 
-void Eval::undoMove(Board* board, uint move) {
+void Eval::undoMove(uint move) {
+    board->currentTurn = !board->currentTurn;
+
     uint oldSquare = (move & 0b00000000000111111);
     uint newSquare = (move & 0b00000111111000000) >> 6;
     uint captured = (move & 0b00111000000000000) >> 12; // 'capture' order (ascending value): P -> Q -> B -> N -> R -> O-O -> O-O-O
     uint promoteTo = (move & 0b11000000000000000) >> 15; // 'promotion' order (ascending value): Q -> B -> N -> R
-
     uint relevantBitboard = 16;
     for (uint i = board->currentTurn ? 2 : 9; board->currentTurn ? i < 8 : i < 15; i++) {
         if ((1ULL << newSquare) & board->pieceLocations[i]) {
@@ -406,12 +424,11 @@ void Eval::undoMove(Board* board, uint move) {
         };
     };
     if (captured > 0 && captured < 6) { // Handle capturing
-        uint opponentBitboard = captured + 1 + (!board->currentTurn * 7);
+        uint opponentBitboard = captured + 1 + (board->currentTurn * 7);
         board->pieceLocations[opponentBitboard] |= (1ULL << newSquare); // Add to opponent's piece's board
         board->pieceLocations[board->currentTurn ? 8 : 1] |= (1ULL << newSquare); // Add to opponent's board
-        
     }
-    else if (captured < 8) { // Handle castling
+    else if (captured > 5 && captured < 8) { // Handle castling
         bool longCastle = captured - 6;
         u64 rookBitboard = board->currentTurn ? 7 : 14;
         u64 oldRookSquare = 1ULL << ((longCastle ? 0 : 7) + (board->currentTurn ? 0 : 56));
@@ -446,24 +463,22 @@ void Eval::undoMove(Board* board, uint move) {
 
     // Add to bitboard for all pieces
     if (!captured) { board->pieceLocations[0] &= ~(1ULL << newSquare); }
-    board->pieceLocations[0] |= (1ULL << newSquare);
+    board->pieceLocations[0] |= (1ULL << oldSquare);
     
     // Add to bitboard for piece's colour
-    board->pieceLocations[board->currentTurn ? 1 : 8] |= (1ULL << oldSquare);
     board->pieceLocations[board->currentTurn ? 1 : 8] &= ~(1ULL << newSquare);
-
-    board->currentTurn = !board->currentTurn;
+    board->pieceLocations[board->currentTurn ? 1 : 8] |= (1ULL << oldSquare);
 }
 
-float Eval::calculateMoveOrderScore(Board* board, MoveData moveData) {
+void Eval::calculateMoveOrderScore(MoveData* moveData) {
     const int PIECEVALUES[7] = {0, 0, 100, 300, 300, 500, 900};
     float score = 0;
     // 1 refutation from TT (handled elsewhere)
     // 2 killer moves
-    if (moveData.move == board->evaluator->killers[currentDepth].first) { return INFINITY - 1; }
-    else if (moveData.move == killers[currentDepth].second) { return INFINITY - 2; };
+    if (moveData->move == this->killers[currentDepth].first) { moveData->score = INFINITY - 1; }
+    else if (moveData->move == killers[currentDepth].second) { moveData->score = INFINITY - 2; };
     // 3 captures in order of risk/reward
-    uint capture = (moveData.move & 0b00111000000000000) >> 12;
+    uint capture = (moveData->move & 0b00111000000000000) >> 12;
     if (capture) {
         if (capture >= 6) {
             score += capture;
@@ -473,39 +488,37 @@ float Eval::calculateMoveOrderScore(Board* board, MoveData moveData) {
         }
     };
     // 4 checks
-    if (moveData.check) { score += 1; };
+    if (moveData->check) { score += 1; };
     // 5 promotions
-    uint promotion = (moveData.move & 0b11000000000000000) >> 15;
+    uint promotion = (moveData->move & 0b11000000000000000) >> 15;
     if (promotion) {
         score += PIECEVALUES[promotion + 2];
     }
-    return score;
+    moveData->score = score;
 };
 
-bool Eval::checksAreValid(Board* board, uint move) {
+bool Eval::checksAreValid(uint move) {
     // TODO: add clause for castling
-    u64 thisKing = board->pieceLocations[board->currentTurn ? 2 : 9];
+    u64 thisKing = board->pieceLocations[board->currentTurn ? 9 : 2];
     uint kingSquare = BitOps::countTrailingZeroes(thisKing);
-    u64 bishopMagicNumber = bishopMagics[kingSquare];
-    u64 rookMagicNumber = rookMagics[kingSquare];
-
-    u64 enemyKing = board->pieceLocations[board->currentTurn ? 9 : 2];
-    u64 enemyPawns = board->pieceLocations[board->currentTurn ? 10 : 3];
-    u64 enemyBishops = board->pieceLocations[board->currentTurn ? 11 : 4];
-    u64 enemyKnights = board->pieceLocations[board->currentTurn ? 12 : 5];
-    u64 enemyRooks = board->pieceLocations[board->currentTurn ? 13 : 6];
-    u64 enemyQueens = board->pieceLocations[board->currentTurn ? 14 : 7];
+    u64 bishopMagicNumber = this->bishopMagics[kingSquare];
+    u64 rookMagicNumber = this->rookMagics[kingSquare];
+    u64 enemyKing = board->pieceLocations[board->currentTurn ? 2 : 9];
+    u64 enemyPawns = board->pieceLocations[board->currentTurn ? 3 : 10];
+    u64 enemyBishops = board->pieceLocations[board->currentTurn ? 4 : 11];
+    u64 enemyKnights = board->pieceLocations[board->currentTurn ? 5 : 12];
+    u64 enemyRooks = board->pieceLocations[board->currentTurn ? 6 : 13];
+    u64 enemyQueens = board->pieceLocations[board->currentTurn ? 7 : 14];
 
     u64 dangerousKingLocations = kingMovesTable[kingSquare];
-    u64 dangerousBishopsLocations = bishopAttacks[kingSquare][(board->pieceLocations[0] & diagonalMasks[kingSquare]) * bishopMagicNumber];
+    u64 dangerousBishopsLocations = bishopAttacks[kingSquare][calculateMagicHash(kingSquare, BISHOP, board->pieceLocations[0])];
     u64 dangerousKnightsLocations = knightMovesTable[kingSquare];
-    u64 dangerousRooksLocations = rookAttacks[kingSquare][(board->pieceLocations[0] & cardinalMasks[kingSquare]) * rookMagicNumber];
-    u64 dangerousPawnsLocations = board->currentTurn ? (thisKing << 9 | thisKing << 7) : (thisKing >> 9 | thisKing >> 7);
-    std::vector<u64>::iterator it;
+    u64 dangerousRooksLocations = rookAttacks[kingSquare][calculateMagicHash(kingSquare, ROOK, board->pieceLocations[0])];
+    u64 dangerousPawnsLocations = board->currentTurn ? ((thisKing & edgeMasks[3]) << 9 | (thisKing & edgeMasks[2]) << 7) : ((thisKing & edgeMasks[2]) >> 9 | (thisKing & edgeMasks[3]) >> 7);
     if (dangerousKingLocations & enemyKing) { return false; };
     if (dangerousBishopsLocations & (enemyBishops | enemyQueens)) { return false; };
-    if (dangerousKnightsLocations & enemyKnights) { return false; }; 
-    if (dangerousRooksLocations & (enemyRooks | enemyQueens)) { return false; }; 
+    if (dangerousKnightsLocations & enemyKnights) { return false; };
+    if (dangerousRooksLocations & (enemyRooks | enemyQueens)) { return false; };
     if (dangerousPawnsLocations & enemyPawns) { return false; };
     return true;
 }
