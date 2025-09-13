@@ -4,7 +4,7 @@ void Board::generateZobristPsuedoRandoms(u64 seed) {
     // Values for a from Steele GL., Vigna S. 'Computationally easy, spectrally good multipliers for congruential pseudorandom number generators', 2022.
     // Zobrist randoms are generated for each square/piece combination, from a1-h8, with each square having 12 assigned numbers. These are in order of ascending
     // piece capture value (King = 0 => Queen = 9), with white pieces first, then black pieces. These map array addresses [0...767]. The numbers after this indicate, 
-    // in order, whether it is white's turn [768], which of the 8 files contain En Passant (skipped) squares [769...766], and the castling rights of each colour, in the order 
+    // in order, whether it is white's turn [768], which of the 8 files contain En Passant (skipped) squares [769...776], and the castling rights of each colour, in the order 
     // white- short, long, black- short, long [777...780].
     for (int i = 0; i < 781; i++) {
         u64 m = 1ULL << 32;
@@ -37,9 +37,9 @@ u64 Board::calculateZobristHash() {
     for (int i = 0; i < 8; i++) {
         if (this->enPassantFiles & (1ULL << i)) { hash^=this->zobristPseudoRandoms[769 + i]; }
     };
-    if (this->whiteCastles.shortCastle) { hash^=this->zobristPseudoRandoms[777]; };
-    if (this->whiteCastles.longCastle) { hash^=this->zobristPseudoRandoms[778]; };
-    if (this->blackCastles.shortCastle) { hash^=this->zobristPseudoRandoms[779]; };
-    if (this->blackCastles.longCastle) { hash^=this->zobristPseudoRandoms[780]; };
+    if (castlingRights & 0b1000) { hash^=zobristPseudoRandoms[777]; };
+    if (castlingRights & 0b0100) { hash^=zobristPseudoRandoms[778]; };
+    if (castlingRights & 0b0010) { hash^=zobristPseudoRandoms[779]; };
+    if (castlingRights & 0b0001) { hash^=zobristPseudoRandoms[780]; };
     return hash;
 }

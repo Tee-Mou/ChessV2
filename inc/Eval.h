@@ -7,20 +7,23 @@
 #define PAWN_STACK_VALUE -0.1
 
 struct MoveData {
-    MoveData(uint addMove, bool addCheck) : move(addMove), check(addCheck) {};
-    uint move;
-    bool check;
+    MoveData(int oldSq, int newSq) : oldSquare(oldSq), newSquare(newSq) {};
+    int oldSquare;
+    int newSquare;
+    int piece;
+    int cPiece = -1;
+    int pPiece = -1;
     float score; // Move score is used to order the evaluation of moves.
 };
 
 struct KillerMoves
 {
-    void addNewKiller(uint move) {
+    void addNewKiller(MoveData* move) {
         first = second;
         second = move;
     };
-    uint first = 0;
-    uint second = 0;
+    MoveData* first = 0;
+    MoveData* second = 0;
     uint mPly;
 };
 
@@ -48,7 +51,6 @@ struct HeatMaps {
         0.375, 0.625, 0.750, 0.750, 0.750, 0.750, 0.625, 0.375,
         0.250, 0.375, 0.500, 0.500, 0.500, 0.500, 0.375, 0.250,
     };
-
 };
 
 class Eval{
@@ -77,13 +79,13 @@ class Eval{
         static u64 initBlockersPermutation(uint index, uint relevantBits, u64 mask);
 
         // gamestate moves
-         std::vector<uint> findKingMoves(uint square);
-         std::vector<uint> findPawnMoves(u64 bitboard);
-         std::vector<uint> findBishopMoves(u64 bitboard);
-         std::vector<uint> findKnightMoves(u64 bitboard);
-         std::vector<uint> findRookMoves(u64 bitboard);
-         std::vector<uint> findPseudoLegalMoves();
-         std::vector<MoveData*> findLegalMoves(std::vector<uint> plm);
+         std::vector<MoveData*> findKingMoves(uint square);
+         std::vector<MoveData*> findPawnMoves(u64 bitboard);
+         std::vector<MoveData*> findBishopMoves(u64 bitboard, bool isQueen = false);
+         std::vector<MoveData*> findKnightMoves(u64 bitboard);
+         std::vector<MoveData*> findRookMoves(u64 bitboard, bool isQueen = false);
+         std::vector<MoveData*> findPseudoLegalMoves();
+         std::vector<MoveData*> findLegalMoves(std::vector<MoveData*> plm);
         static bool compareByScore(MoveData* a, MoveData* b) {
             return a->score < b->score;
         };
@@ -111,9 +113,11 @@ class Eval{
         void addTransposition(Transposition tp);
         float checkTransposition(u64 hashKey, uint depth, float alpha, float beta);
 
-        void doMove(uint move);
-        void undoMove(uint move);
-        bool checksAreValid(uint move);
+        void doMove(MoveData* move);
+        void undoMove(MoveData* move);
+        void revertBoardRights();
+        std::vector<MoveData*> addPawnMove(MoveData* move);
+        bool checksAreValid();
         void calculateMoveOrderScore(MoveData* moveData);
 
         uint currentDepth = 0;
@@ -121,7 +125,8 @@ class Eval{
         Transposition transpositionCache[TRANSPOSITION_CACHE_SIZE];
         KillerMoves killers[32];
 
-        uint total = 0;
+        std::vector<int> enPassantHistory;
+        std::vector<int> castlingRightsHistory;
 
         Board* board;
         u64 pawnMasks[2]; // Bit Masks for Pawns

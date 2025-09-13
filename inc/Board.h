@@ -3,11 +3,6 @@
 using u64 = unsigned long long;
 using uint = unsigned int;
 
-struct Castles {
-    bool longCastle = true;
-    bool shortCastle = true;
-};
-
 class Board {
     public:
         
@@ -37,15 +32,15 @@ class Board {
         void generateZobristPsuedoRandoms(u64 seed);
         u64 calculateZobristHash();
         
+        uint castlingRights = 0b0000;
+        uint enPassantFiles = 0b00000000;
         
         u64 pieceLocations[15];
-        uint enPassantFiles = 0b00000000;
         u64 attackMapWhite = 0b0000000000000000000000000000000000000000000000001111111100000000;
         u64 defendMapWhite = 0b0000000000000000000000000000000000000000000000001111111100000000;    
         u64 attackMapBlack = 0b0000000011111111000000000000000000000000000000000000000000000000;
         u64 defendMapBlack = 0b0000000011111111000000000000000000000000000000000000000000000000;
-        u64 zobristHash;
-        Castles whiteCastles, blackCastles; 
+        u64 zobristHash; 
         u64 zobristPseudoRandoms[781];
         
         bool currentTurn = 1;
